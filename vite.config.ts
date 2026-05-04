@@ -1,8 +1,10 @@
 // @ts-ignore - Package is installed, TS server needs reload
 import tailwindcss from '@tailwindcss/vite';
+// @ts-ignore - Package is installed, TS server needs reload
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
+// @ts-ignore - Package is installed, TS server needs reload
 import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(({mode}) => {

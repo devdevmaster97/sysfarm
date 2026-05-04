@@ -1,5 +1,4 @@
-import { Request, Response } from "express";
-const express = require("express");
+import express, { Request, Response } from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import pg from 'pg';
