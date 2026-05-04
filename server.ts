@@ -14,8 +14,12 @@ async function startServer() {
 
   // Database Connection Pool
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false }
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME || 'sysfarm',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_HOST?.includes('localhost') ? false : { rejectUnauthorized: false }
   });
 
   app.use(express.json());
