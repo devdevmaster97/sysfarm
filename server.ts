@@ -20,14 +20,24 @@ async function startServer() {
   }));
 
   // Database Connection Pool
-  const pool = new Pool({
+  const dbConfig = {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
     database: process.env.DB_NAME || 'sysfarm',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD,
     ssl: process.env.DB_HOST?.includes('localhost') ? false : { rejectUnauthorized: false }
+  };
+  
+  console.log('Database config:', {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    database: dbConfig.database,
+    user: dbConfig.user,
+    hasPassword: !!dbConfig.password
   });
+  
+  const pool = new Pool(dbConfig);
 
   app.use(express.json());
 
@@ -36,20 +46,25 @@ async function startServer() {
   // Login Route
   app.post("/api/login", async (req: Request, res: Response) => {
     const { email, password } = req.body;
+    console.log('Login attempt for:', email);
     try {
+      console.log('Connecting to database...');
       const result = await pool.query(
         'SELECT id_usuario, nome, email FROM usuarios WHERE email = $1 AND senha = $2 AND ativo = true',
         [email, password]
       );
+      console.log('Query executed, rows found:', result.rows.length);
 
       if (result.rows.length > 0) {
+        console.log('Login successful for:', email);
         res.json({ success: true, user: result.rows[0] });
       } else {
+        console.log('Invalid credentials for:', email);
         res.status(401).json({ success: false, message: "Credenciais inválidas ou usuário inativo." });
       }
     } catch (err) {
-      console.error(err);
-      res.status(500).json({ success: false, message: "Erro no servidor ao tentar logar." });
+      console.error('Login error:', err);
+      res.status(500).json({ success: false, message: "Erro no servidor ao tentar logar.", error: String(err) });
     }
   });
 
