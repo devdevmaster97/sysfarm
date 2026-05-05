@@ -26,7 +26,7 @@ async function startServer() {
     database: process.env.DB_NAME || 'sysfarm',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD,
-    ssl: process.env.DB_HOST?.includes('localhost') ? false : { rejectUnauthorized: false }
+    ssl: false // Disable SSL as the server doesn't support it
   };
   
   console.log('Database config:', {
