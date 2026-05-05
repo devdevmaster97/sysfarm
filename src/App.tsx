@@ -58,7 +58,9 @@ export default function App() {
     if (!user) return;
     async function fetchData() {
       try {
-        const res = await fetch(`${API_URL}/api/categories`);
+        const res = await fetch(`${API_URL}/api/categories`, {
+          credentials: 'include'
+        });
         if (res.ok) {
           const data = await res.json();
           setCategories(data);
@@ -261,11 +263,14 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     setError('');
 
     try {
+      console.log('Tentando login em:', `${API_URL}/api/login`);
       const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password })
       });
+      console.log('Resposta recebida:', res.status);
       const data = await res.json();
       if (data.success) {
         onLogin(data.user);
@@ -273,6 +278,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
         setError(data.message || 'Erro ao realizar login.');
       }
     } catch (err) {
+      console.error('Erro no login:', err);
       setError('Erro de conexão com o servidor.');
     } finally {
       setLoading(false);
