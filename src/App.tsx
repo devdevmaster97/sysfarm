@@ -20,6 +20,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { API_URL } from './config';
 
 // --- Types ---
 interface User {
@@ -57,7 +58,7 @@ export default function App() {
     if (!user) return;
     async function fetchData() {
       try {
-        const res = await fetch('/api/categories');
+        const res = await fetch(`${API_URL}/api/categories`);
         if (res.ok) {
           const data = await res.json();
           setCategories(data);
@@ -260,7 +261,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     setError('');
 
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
