@@ -52,6 +52,8 @@ export default function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false); // Mobile closed by default
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
 
   // Initial Data Fetch
   useEffect(() => {
@@ -229,7 +231,10 @@ export default function App() {
               <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-wider text-farm-green/60">Saldo Atual</span>
               <span className="text-sm lg:text-lg font-bold">R$ 142.500,00</span>
             </div>
-            <button className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base">
+            <button 
+              onClick={() => setExpenseModalOpen(true)}
+              className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
+            >
               <Plus size={20} />
               <span className="hidden sm:inline">Lançamento</span>
             </button>
@@ -240,11 +245,22 @@ export default function App() {
         <div className="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && <Dashboard />}
-            {activeTab === 'expenses' && <ExpenseList />}
+            {activeTab === 'expenses' && <ExpenseList expenses={expenses} />}
             {activeTab === 'categories' && <CategoryList categories={categories} />}
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Expense Modal */}
+      <ExpenseModal 
+        isOpen={isExpenseModalOpen}
+        onClose={() => setExpenseModalOpen(false)}
+        categories={categories}
+        onSave={(newExpense) => {
+          setExpenses([newExpense, ...expenses]);
+          setExpenseModalOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -445,38 +461,274 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList() {
+function ExpenseList({ expenses }: { expenses: Expense[] }) {
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
     >
-      <div className="overflow-x-auto">
-        <table className="w-full text-left min-w-[600px]">
-          <thead className="bg-farm-cream/50 border-b border-farm-green/10">
-            <tr className="serif text-xs uppercase tracking-widest text-farm-green/60">
-              <th className="px-6 py-4">Data</th>
-              <th className="px-6 py-4">Histórico</th>
-              <th className="px-6 py-4">Categoria</th>
-              <th className="px-6 py-4 text-right">Valor</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-farm-green/5">
-            {[1, 2, 3, 4, 5].map(i => (
-              <tr key={i} className="hover:bg-farm-cream/20 transition-colors group">
-                <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">10/05/2026</td>
-                <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">Pagamento Mão de Obra Colheita</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">Mão de Obra</span>
-                </td>
-                <td className="px-6 py-4 text-right font-black text-rose-600 whitespace-nowrap">R$ 5.400,00</td>
+      {expenses.length === 0 ? (
+        <div className="p-12 text-center">
+          <Receipt className="mx-auto text-farm-green/20 mb-4" size={48} />
+          <p className="text-farm-green/40 font-medium italic">Nenhum lançamento cadastrado ainda.</p>
+          <p className="text-farm-green/30 text-sm mt-2">Clique no botão "Lançamento" para adicionar.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[600px]">
+            <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+              <tr className="serif text-xs uppercase tracking-widest text-farm-green/60">
+                <th className="px-6 py-4">Data</th>
+                <th className="px-6 py-4">Histórico</th>
+                <th className="px-6 py-4">Categoria</th>
+                <th className="px-6 py-4 text-right">Valor</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-farm-green/5">
+              {expenses.map(expense => (
+                <tr key={expense.id_caixa} className="hover:bg-farm-cream/20 transition-colors group">
+                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">{formatDate(expense.data_lancamento)}</td>
+                  <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
+                      Cat. {expense.id_categoria_caixa}
+                    </span>
+                  </td>
+                  <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </motion.div>
+  );
+}
+
+function ExpenseModal({ isOpen, onClose, categories, onSave }: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  categories: Category[];
+  onSave: (expense: Expense) => void;
+}) {
+  const [formData, setFormData] = useState({
+    data_lancamento: new Date().toISOString().split('T')[0],
+    historico: '',
+    valor: '',
+    natureza: 'D' as 'D' | 'C',
+    id_categoria_caixa: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API_URL}/api/expenses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...formData,
+          valor: parseFloat(formData.valor),
+          id_categoria_caixa: parseInt(formData.id_categoria_caixa)
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onSave(data.expense);
+        setFormData({
+          data_lancamento: new Date().toISOString().split('T')[0],
+          historico: '',
+          valor: '',
+          natureza: 'D',
+          id_categoria_caixa: ''
+        });
+      } else {
+        setError('Erro ao salvar lançamento.');
+      }
+    } catch (err) {
+      setError('Erro de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div className="bg-farm-green p-8 rounded-t-3xl">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-farm-cream rounded-2xl">
+                  <Receipt className="text-farm-green" size={24} />
+                </div>
+                <h2 className="font-serif text-2xl font-bold text-farm-cream">Novo Lançamento</h2>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-farm-cream/10 rounded-xl transition-colors text-farm-cream"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            {error && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                  Data
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.data_lancamento}
+                  onChange={(e) => setFormData({ ...formData, data_lancamento: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                  Tipo
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, natureza: 'D' })}
+                    className={`p-3 rounded-xl font-bold uppercase text-sm transition-all ${
+                      formData.natureza === 'D'
+                        ? 'bg-rose-500 text-white shadow-lg'
+                        : 'bg-farm-cream text-farm-green hover:bg-rose-100'
+                    }`}
+                  >
+                    <ArrowDownCircle size={18} className="inline mr-2" />
+                    Despesa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, natureza: 'C' })}
+                    className={`p-3 rounded-xl font-bold uppercase text-sm transition-all ${
+                      formData.natureza === 'C'
+                        ? 'bg-emerald-500 text-white shadow-lg'
+                        : 'bg-farm-cream text-farm-green hover:bg-emerald-100'
+                    }`}
+                  >
+                    <ArrowUpCircle size={18} className="inline mr-2" />
+                    Receita
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                Histórico
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Compra de Adubo NPK"
+                value={formData.historico}
+                onChange={(e) => setFormData({ ...formData, historico: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                  Valor (R$)
+                </label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  placeholder="0,00"
+                  value={formData.valor}
+                  onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-bold text-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                  Categoria
+                </label>
+                <select
+                  required
+                  value={formData.id_categoria_caixa}
+                  onChange={(e) => setFormData({ ...formData, id_categoria_caixa: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+                >
+                  <option value="">Selecione...</option>
+                  {categories.map(cat => (
+                    <option key={cat.id_categoria_caixa} value={cat.id_categoria_caixa}>
+                      {cat.descricao}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-6 py-3 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 px-6 py-3 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Salvando...' : 'Salvar Lançamento'}
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

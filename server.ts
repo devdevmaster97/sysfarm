@@ -100,6 +100,24 @@ async function startServer() {
   });
 
   // Expenses/Transactions routes
+  app.post("/api/expenses", async (req: Request, res: Response) => {
+    try {
+      const { data_lancamento, historico, valor, natureza, id_categoria_caixa } = req.body;
+      
+      const result = await pool.query(
+        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING *`,
+        [data_lancamento, historico, valor, natureza, id_categoria_caixa]
+      );
+
+      res.json({ success: true, expense: result.rows[0] });
+    } catch (err) {
+      console.error('Error saving expense:', err);
+      res.status(500).json({ success: false, message: "Erro ao salvar lançamento.", error: String(err) });
+    }
+  });
+
   app.get("/api/transactions", async (req: Request, res: Response) => {
     try {
       const { startDate, endDate, categoria, natureza } = req.query;
