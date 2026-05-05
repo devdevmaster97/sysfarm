@@ -20,24 +20,15 @@ async function startServer() {
   }));
 
   // Database Connection Pool
-  const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_NAME || 'sysfarm',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD,
-    ssl: false // Disable SSL as the server doesn't support it
-  };
+  // Use DATABASE_URL from Railway or fallback to individual variables
+  const connectionString = process.env.DATABASE_PUBLIC_URL || process.env.DATABASE_URL;
   
-  console.log('Database config:', {
-    host: dbConfig.host,
-    port: dbConfig.port,
-    database: dbConfig.database,
-    user: dbConfig.user,
-    hasPassword: !!dbConfig.password
+  const pool = new Pool({
+    connectionString,
+    ssl: false // Railway internal database doesn't need SSL
   });
   
-  const pool = new Pool(dbConfig);
+  console.log('Database connected:', connectionString ? 'Using connection string' : 'Using individual variables');
 
   app.use(express.json());
 
