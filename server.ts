@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import pg from 'pg';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 dotenv.config();
 
@@ -10,7 +11,13 @@ const { Pool } = pg;
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
+
+  // CORS configuration
+  app.use(cors({
+    origin: ['https://sysfarm.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+    credentials: true
+  }));
 
   // Database Connection Pool
   const pool = new Pool({
