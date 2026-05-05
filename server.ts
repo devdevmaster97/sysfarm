@@ -77,6 +77,17 @@ async function startServer() {
     }
   });
 
+  app.get("/api/ip", async (req: Request, res: Response) => {
+    try {
+      // Get public IP by querying an external service
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      res.json({ ip: data.ip, headers: req.headers });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to get IP" });
+    }
+  });
+
   // Categories routes
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
