@@ -11,7 +11,7 @@ const { Pool } = pg;
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
 
   // CORS configuration
   app.use(cors({
@@ -86,6 +86,36 @@ async function startServer() {
     try {
       const result = await pool.query('SELECT * FROM categoria_caixa ORDER BY descricao ASC');
       res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/categories", async (req: Request, res: Response) => {
+    try {
+      const { descricao } = req.body;
+      if (!descricao) return res.status(400).json({ status: "error", message: "Descrição obrigatória" });
+      const result = await pool.query(
+        'INSERT INTO categoria_caixa (descricao) VALUES ($1) RETURNING *',
+        [descricao]
+      );
+      res.status(201).json({ status: "success", data: result.rows[0] });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
+  app.put("/api/categories/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { descricao } = req.body;
+      if (!descricao) return res.status(400).json({ status: "error", message: "Descrição obrigatória" });
+      const result = await pool.query(
+        'UPDATE categoria_caixa SET descricao = $1 WHERE id_categoria_caixa = $2 RETURNING *',
+        [descricao, id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ status: "error", message: "Categoria não encontrada" });
+      res.json({ status: "success", data: result.rows[0] });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
     }

@@ -17,7 +17,10 @@ import {
   ChevronRight,
   LogOut,
   User,
-  Lock
+  Lock,
+  Pencil,
+  Trash2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -54,25 +57,60 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
-  // Initial Data Fetch
+  // Fetch categories on login
   useEffect(() => {
     if (!user) return;
-    async function fetchData() {
-      try {
-        const res = await fetch(`${API_URL}/api/categories`, {
-          credentials: 'include'
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setCategories(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch categories.");
-      }
-    }
-    fetchData();
+    fetch(`${API_URL}/api/categories`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setCategories(data))
+      .catch(() => {});
   }, [user]);
+
+  // Fetch transactions when expenses tab is active
+  useEffect(() => {
+    if (activeTab === 'expenses' && user) {
+      fetchTransactions();
+    }
+  }, [activeTab, user]);
+
+  const fetchTransactions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/transactions`, { credentials: 'include' });
+      if (res.ok) setExpenses(await res.json());
+    } catch (err) {
+      console.error("Erro ao buscar lançamentos.");
+    }
+  };
+
+  const handleDeleteExpense = async (id: number) => {
+    if (!window.confirm('Confirma a exclusão deste lançamento?')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+        method: 'DELETE', credentials: 'include'
+      });
+      if (res.ok) setExpenses(prev => prev.filter(e => e.id_caixa !== id));
+    } catch (err) {
+      console.error('Erro ao excluir lançamento.');
+    }
+  };
+
+  const handleUpdateCategory = async (id: number, descricao: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ descricao })
+      });
+      if (res.ok) {
+        setCategories(prev => prev.map(c => c.id_categoria_caixa === id ? { ...c, descricao } : c));
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar categoria.');
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('sysfarm_user');
@@ -245,8 +283,17 @@ export default function App() {
         <div className="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && <Dashboard />}
-            {activeTab === 'expenses' && <ExpenseList expenses={expenses} />}
-            {activeTab === 'categories' && <CategoryList categories={categories} />}
+            {activeTab === 'expenses' && (
+              <ExpenseList
+                expenses={expenses}
+                categories={categories}
+                onEdit={(exp) => { setEditingExpense(exp); setExpenseModalOpen(true); }}
+                onDelete={handleDeleteExpense}
+              />
+            )}
+            {activeTab === 'categories' && (
+              <CategoryList categories={categories} onUpdate={handleUpdateCategory} />
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -254,11 +301,17 @@ export default function App() {
       {/* Expense Modal */}
       <ExpenseModal 
         isOpen={isExpenseModalOpen}
-        onClose={() => setExpenseModalOpen(false)}
+        onClose={() => { setExpenseModalOpen(false); setEditingExpense(null); }}
         categories={categories}
-        onSave={(newExpense) => {
-          setExpenses([newExpense, ...expenses]);
+        expense={editingExpense}
+        onSave={(saved) => {
+          if (editingExpense) {
+            setExpenses(prev => prev.map(e => e.id_caixa === saved.id_caixa ? saved : e));
+          } else {
+            setExpenses(prev => [saved, ...prev]);
+          }
           setExpenseModalOpen(false);
+          setEditingExpense(null);
         }}
       />
     </div>
@@ -461,18 +514,25 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList({ expenses }: { expenses: Expense[] }) {
+function ExpenseList({ expenses, categories, onEdit, onDelete }: {
+  expenses: Expense[];
+  categories: Category[];
+  onEdit: (exp: Expense) => void;
+  onDelete: (id: number) => void;
+}) {
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr + 'T12:00:00');
     return date.toLocaleDateString('pt-BR');
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const getCategoryName = (id: number) =>
+    categories.find(c => c.id_categoria_caixa === id)?.descricao ?? `Cat. ${id}`;
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
@@ -485,13 +545,14 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[600px]">
+          <table className="w-full text-left min-w-[700px]">
             <thead className="bg-farm-cream/50 border-b border-farm-green/10">
-              <tr className="serif text-xs uppercase tracking-widest text-farm-green/60">
+              <tr className="text-xs uppercase tracking-widest text-farm-green/60">
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Histórico</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4 text-right">Valor</th>
+                <th className="px-4 py-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-farm-green/5">
@@ -501,11 +562,29 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
                   <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
-                      Cat. {expense.id_categoria_caixa}
+                      {getCategoryName(expense.id_categoria_caixa)}
                     </span>
                   </td>
                   <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
                     {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => onEdit(expense)}
+                        className="p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                        title="Editar"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => onDelete(expense.id_caixa)}
+                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"
+                        title="Excluir"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -517,12 +596,15 @@ function ExpenseList({ expenses }: { expenses: Expense[] }) {
   );
 }
 
-function ExpenseModal({ isOpen, onClose, categories, onSave }: { 
+function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: { 
   isOpen: boolean; 
   onClose: () => void; 
   categories: Category[];
   onSave: (expense: Expense) => void;
+  expense?: Expense | null;
 }) {
+  const isEditing = !!expense;
+
   const [formData, setFormData] = useState({
     data_lancamento: new Date().toISOString().split('T')[0],
     historico: '',
@@ -533,14 +615,39 @@ function ExpenseModal({ isOpen, onClose, categories, onSave }: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (expense) {
+      setFormData({
+        data_lancamento: expense.data_lancamento.split('T')[0],
+        historico: expense.historico,
+        valor: String(expense.valor),
+        natureza: expense.natureza,
+        id_categoria_caixa: String(expense.id_categoria_caixa)
+      });
+    } else {
+      setFormData({
+        data_lancamento: new Date().toISOString().split('T')[0],
+        historico: '',
+        valor: '',
+        natureza: 'D',
+        id_categoria_caixa: ''
+      });
+    }
+  }, [expense, isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const res = await fetch(`${API_URL}/api/expenses`, {
-        method: 'POST',
+      const url = isEditing
+        ? `${API_URL}/api/transactions/${expense!.id_caixa}`
+        : `${API_URL}/api/expenses`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
@@ -552,14 +659,7 @@ function ExpenseModal({ isOpen, onClose, categories, onSave }: {
 
       if (res.ok) {
         const data = await res.json();
-        onSave(data.expense);
-        setFormData({
-          data_lancamento: new Date().toISOString().split('T')[0],
-          historico: '',
-          valor: '',
-          natureza: 'D',
-          id_categoria_caixa: ''
-        });
+        onSave(isEditing ? data.data : data.expense);
       } else {
         setError('Erro ao salvar lançamento.');
       }
@@ -594,7 +694,9 @@ function ExpenseModal({ isOpen, onClose, categories, onSave }: {
                 <div className="p-3 bg-farm-cream rounded-2xl">
                   <Receipt className="text-farm-green" size={24} />
                 </div>
-                <h2 className="font-serif text-2xl font-bold text-farm-cream">Novo Lançamento</h2>
+                <h2 className="font-serif text-2xl font-bold text-farm-cream">
+                  {isEditing ? 'Editar Lançamento' : 'Novo Lançamento'}
+                </h2>
               </div>
               <button
                 onClick={onClose}
@@ -722,7 +824,7 @@ function ExpenseModal({ isOpen, onClose, categories, onSave }: {
                 disabled={loading}
                 className="flex-1 px-6 py-3 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Salvando...' : 'Salvar Lançamento'}
+                {loading ? 'Salvando...' : isEditing ? 'Salvar Alterações' : 'Salvar Lançamento'}
               </button>
             </div>
           </form>
@@ -732,22 +834,59 @@ function ExpenseModal({ isOpen, onClose, categories, onSave }: {
   );
 }
 
-function CategoryList({ categories }: { categories: Category[] }) {
+function CategoryList({ categories, onUpdate }: { categories: Category[]; onUpdate: (id: number, descricao: string) => void }) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const startEdit = (cat: Category) => {
+    setEditingId(cat.id_categoria_caixa);
+    setEditValue(cat.descricao);
+  };
+
+  const confirmEdit = (id: number) => {
+    if (editValue.trim()) {
+      onUpdate(id, editValue.trim().toUpperCase());
+    }
+    setEditingId(null);
+  };
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
     >
       {categories.length > 0 ? (
         categories.map(cat => (
-          <div key={cat.id_categoria_caixa} className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5 hover:border-farm-green/20 transition-all group">
-            <div className="flex justify-between items-center">
-              <h4 className="font-serif text-xl font-bold">{cat.descricao}</h4>
-              <button className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all">
-                <Settings size={18} />
-              </button>
-            </div>
+          <div key={cat.id_categoria_caixa} className="bg-white p-5 rounded-2xl shadow-sm border border-farm-green/5 hover:border-farm-green/20 transition-all group">
+            {editingId === cat.id_categoria_caixa ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmEdit(cat.id_categoria_caixa); if (e.key === 'Escape') setEditingId(null); }}
+                  className="flex-1 px-3 py-2 border-2 border-farm-green rounded-xl text-sm font-bold uppercase focus:outline-none"
+                />
+                <button onClick={() => confirmEdit(cat.id_categoria_caixa)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all">
+                  <Check size={16} />
+                </button>
+                <button onClick={() => setEditingId(null)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all">
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-sm uppercase tracking-tight text-farm-brown leading-snug pr-2">{cat.descricao}</span>
+                <button
+                  onClick={() => startEdit(cat)}
+                  className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all flex-shrink-0"
+                  title="Editar"
+                >
+                  <Pencil size={15} />
+                </button>
+              </div>
+            )}
           </div>
         ))
       ) : (
