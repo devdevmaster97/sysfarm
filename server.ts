@@ -25,7 +25,7 @@ async function startServer() {
   
   const pool = new Pool({
     connectionString,
-    ssl: false // Railway internal database doesn't need SSL
+    ssl: { rejectUnauthorized: false } // supabase exige ssl true para conexão externa
   });
   
   console.log('Database connected:', connectionString ? 'Using connection string' : 'Using individual variables');
