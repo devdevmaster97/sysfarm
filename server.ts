@@ -28,7 +28,9 @@ async function startServer() {
     ssl: { rejectUnauthorized: false } // supabase exige ssl true para conexão externa
   });
   
-  console.log('Database connected:', connectionString ? 'Using connection string' : 'Using individual variables');
+  const connSource = process.env.DATABASE_PUBLIC_URL ? 'DATABASE_PUBLIC_URL' : process.env.DATABASE_URL ? 'DATABASE_URL' : 'NONE';
+  console.log('Database source:', connSource);
+  console.log('Connection host:', connectionString ? connectionString.replace(/:([^:@]+)@/, ':***@') : 'NOT SET');
 
   app.use(express.json());
 
@@ -64,7 +66,7 @@ async function startServer() {
       const result = await pool.query('SELECT NOW()');
       res.json({ status: "ok", db_time: result.rows[0].now });
     } catch (err) {
-      res.status(500).json({ status: "error", message: "Database connection failed" });
+      res.status(500).json({ status: "error", message: "Database connection failed", detail: String(err) });
     }
   });
 
