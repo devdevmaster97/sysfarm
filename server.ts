@@ -15,7 +15,7 @@ async function startServer() {
 
   // CORS configuration
   app.use(cors({
-    origin: ['https://sysfarm.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
+    origin: true,
     credentials: true
   }));
 
