@@ -279,16 +279,16 @@ async function startServer() {
   app.get("/api/dashboard/recent", async (req: Request, res: Response) => {
     try {
       const result = await pool.query(`
-        SELECT c.id_caixa, c.data_lancamento, c.historico, c.valor, c.natureza,
+        SELECT c.data_lancamento, c.historico, c.valor, c.natureza,
                cat.descricao as categoria_nome
         FROM caixa c
         LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
-        ORDER BY c.data_lancamento DESC, c.id_caixa DESC
-        LIMIT 8
+        ORDER BY c.data_lancamento DESC
+        LIMIT 10
       `);
       res.json(result.rows);
     } catch (err) {
-      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
     }
   });
 

@@ -521,76 +521,92 @@ function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Activity */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
-          <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
-            <Calendar size={20} className="text-farm-green" />
-            Atividade Recente
-          </h3>
-          {loading ? (
-            <div className="space-y-3">
-              {[1,2,3,4].map(i => <div key={i} className="h-16 bg-farm-cream/40 rounded-2xl animate-pulse" />)}
-            </div>
-          ) : recent.length === 0 ? (
-            <p className="text-farm-green/40 text-sm italic text-center py-8">Nenhum lançamento encontrado.</p>
-          ) : (
-            <div className="space-y-3">
-              {recent.map((item, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-farm-cream/30 rounded-2xl hover:bg-farm-cream/50 transition-colors">
-                  <div className="flex gap-3 items-center min-w-0">
-                    <div className={`p-2 rounded-xl flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50' : 'bg-emerald-50'}`}>
-                      {item.natureza === 'D'
-                        ? <ArrowDownCircle size={16} className="text-rose-500" />
-                        : <ArrowUpCircle size={16} className="text-emerald-500" />
-                      }
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate uppercase">{item.historico}</p>
-                      <p className="text-xs text-farm-green/60 truncate">{item.categoria_nome ?? '—'}</p>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0 ml-3">
-                    <p className={`font-bold text-sm ${item.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
+      {/* Recent Activity — full width */}
+      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
+        <div className="p-6 border-b border-farm-green/10 flex items-center gap-2">
+          <Calendar size={20} className="text-farm-green" />
+          <h3 className="text-xl font-serif font-bold">Atividade Recente</h3>
+          <span className="ml-auto text-xs text-farm-green/40 font-medium">Últimos 10 lançamentos</span>
+        </div>
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-farm-cream/40 rounded-2xl animate-pulse" />)}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="p-12 text-center">
+            <Receipt className="mx-auto text-farm-green/20 mb-3" size={40} />
+            <p className="text-farm-green/40 text-sm italic">Nenhum lançamento encontrado.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[500px]">
+              <thead className="bg-farm-cream/50">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+                  <th className="px-6 py-3">Data</th>
+                  <th className="px-6 py-3">Histórico</th>
+                  <th className="px-6 py-3">Categoria</th>
+                  <th className="px-6 py-3 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-farm-green/5">
+                {recent.map((item, i) => (
+                  <tr key={i} className="hover:bg-farm-cream/20 transition-colors">
+                    <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70">{formatDate(item.data_lancamento)}</td>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+                          {item.natureza === 'D'
+                            ? <ArrowDownCircle size={13} className="text-rose-500" />
+                            : <ArrowUpCircle size={13} className="text-emerald-500" />
+                          }
+                        </div>
+                        <span className="text-sm font-bold uppercase truncate max-w-[200px]">{item.historico}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <span className="px-2 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase">
+                        {item.categoria_nome ?? '—'}
+                      </span>
+                    </td>
+                    <td className={`px-6 py-3 text-right font-black text-sm whitespace-nowrap ${item.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
                       {item.natureza === 'D' ? '- ' : '+ '}{fmt(item.valor)}
-                    </p>
-                    <p className="text-[10px] uppercase font-bold text-farm-green/40 tracking-widest">{formatDate(item.data_lancamento)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-        {/* By Category */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
-          <h3 className="text-xl font-serif font-bold mb-1">Despesas por Categoria</h3>
-          <p className="text-xs text-farm-green/40 mb-5 italic capitalize">{monthName}</p>
-          {loading ? (
-            <div className="space-y-3">
-              {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-farm-cream/40 rounded-xl animate-pulse" />)}
-            </div>
-          ) : byCategory.length === 0 ? (
-            <p className="text-farm-green/40 text-sm italic text-center py-8">Nenhuma despesa no mês.</p>
-          ) : (
-            <div className="space-y-3 overflow-y-auto max-h-80 pr-1">
-              {byCategory.map((c, i) => (
-                <div key={i}>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold uppercase tracking-tight text-farm-brown truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
-                    <span className="text-xs font-black text-rose-600 flex-shrink-0">{fmt(c.total)}</span>
-                  </div>
-                  <div className="h-2 bg-farm-cream rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-farm-green rounded-full transition-all"
-                      style={{ width: `${Math.round((c.total / maxCategoria) * 100)}%` }}
-                    />
-                  </div>
+      {/* By Category */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
+        <h3 className="text-xl font-serif font-bold mb-1">Despesas por Categoria</h3>
+        <p className="text-xs text-farm-green/40 mb-5 italic capitalize">{monthName}</p>
+        {loading ? (
+          <div className="space-y-3">
+            {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-farm-cream/40 rounded-xl animate-pulse" />)}
+          </div>
+        ) : byCategory.length === 0 ? (
+          <p className="text-farm-green/40 text-sm italic text-center py-8">Nenhuma despesa no mês.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {byCategory.map((c, i) => (
+              <div key={i}>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-bold uppercase tracking-tight text-farm-brown truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
+                  <span className="text-xs font-black text-rose-600 flex-shrink-0">{fmt(c.total)}</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <div className="h-2 bg-farm-cream rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-farm-green rounded-full transition-all"
+                    style={{ width: `${Math.round((c.total / maxCategoria) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   );
