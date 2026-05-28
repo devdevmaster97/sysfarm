@@ -34,6 +34,7 @@ interface User {
   id_usuario: number;
   nome: string;
   email: string;
+  perfil: 'admin' | 'readonly';
 }
 
 interface Category {
@@ -280,6 +281,8 @@ export default function App() {
     );
   }
 
+  const isReadonly = user?.perfil === 'readonly';
+
   const menuItems = [
     { id: 'dashboard', label: 'Painel', icon: LayoutDashboard },
     { id: 'expenses', label: 'Lançamentos', icon: Receipt },
@@ -346,7 +349,9 @@ export default function App() {
             </div>
             <div className="overflow-hidden">
               <p className="text-sm font-bold truncate text-farm-cream">{user.nome}</p>
-              <p className="text-[10px] text-farm-cream/50 truncate uppercase tracking-widest">Admin</p>
+              <p className="text-[10px] text-farm-cream/50 truncate uppercase tracking-widest">
+                {user.perfil === 'readonly' ? 'Somente Leitura' : 'Admin'}
+              </p>
             </div>
           </div>
         )}
@@ -421,13 +426,15 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 lg:gap-4">
-            <button 
-              onClick={() => setExpenseModalOpen(true)}
-              className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
-            >
-              <Plus size={20} />
-              <span className="hidden sm:inline">Lançamento</span>
-            </button>
+            {!isReadonly && (
+              <button 
+                onClick={() => setExpenseModalOpen(true)}
+                className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
+              >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Lançamento</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -445,12 +452,13 @@ export default function App() {
                 totalPages={totalPages}
                 totalRecords={totalRecords}
                 onPageChange={setCurrentPage}
+                isReadonly={isReadonly}
               />
             )}
             {activeTab === 'categories' && (
-              <CategoryList categories={categories} onUpdate={handleUpdateCategory} />
+              <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
             )}
-            {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} />}
+            {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
           </AnimatePresence>
         </div>
       </main>
@@ -792,7 +800,7 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange }: {
+function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange, isReadonly }: {
   expenses: Expense[];
   categories: Category[];
   onEdit: (exp: Expense) => void;
@@ -801,6 +809,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
   totalPages: number;
   totalRecords: number;
   onPageChange: (page: number) => void;
+  isReadonly?: boolean;
 }) {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -860,22 +869,24 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
                     {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => onEdit(expense)}
-                        className="p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
-                        title="Editar"
-                      >
-                        <Pencil size={15} />
-                      </button>
-                      <button
-                        onClick={() => onDelete(expense.id_caixa)}
-                        className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"
-                        title="Excluir"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
+                    {!isReadonly && (
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => onEdit(expense)}
+                          className="p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                          title="Editar"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          onClick={() => onDelete(expense.id_caixa)}
+                          className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"
+                          title="Excluir"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1267,7 +1278,7 @@ function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
   );
 }
 
-function BankList({ banks, onUpdate }: { banks: BankRow[]; onUpdate: (id: number, fields: Omit<BankRow, 'id_banco'>) => void }) {
+function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate: (id: number, fields: Omit<BankRow, 'id_banco'>) => void; isReadonly?: boolean }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ nome: '', numero_agencia: '', numero_conta: '', cidade: '' });
 
@@ -1341,15 +1352,17 @@ function BankList({ banks, onUpdate }: { banks: BankRow[]; onUpdate: (id: number
                       <td className="px-4 py-4 text-sm text-farm-green/70">{bank.numero_conta || '—'}</td>
                       <td className="px-4 py-4 text-sm text-farm-green/70">{bank.cidade || '—'}</td>
                       <td className="px-4 py-4">
-                        <div className="flex items-center justify-center">
-                          <button
-                            onClick={() => startEdit(bank)}
-                            className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
-                            title="Editar"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                        </div>
+                        {!isReadonly && (
+                          <div className="flex items-center justify-center">
+                            <button
+                              onClick={() => startEdit(bank)}
+                              className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                              title="Editar"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </>
                   )}
@@ -1363,7 +1376,7 @@ function BankList({ banks, onUpdate }: { banks: BankRow[]; onUpdate: (id: number
   );
 }
 
-function CategoryList({ categories, onUpdate }: { categories: Category[]; onUpdate: (id: number, descricao: string) => void }) {
+function CategoryList({ categories, onUpdate, isReadonly }: { categories: Category[]; onUpdate: (id: number, descricao: string) => void; isReadonly?: boolean }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -1407,13 +1420,15 @@ function CategoryList({ categories, onUpdate }: { categories: Category[]; onUpda
             ) : (
               <div className="flex justify-between items-center">
                 <span className="font-bold text-sm uppercase tracking-tight text-farm-brown leading-snug pr-2">{cat.descricao}</span>
-                <button
-                  onClick={() => startEdit(cat)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all flex-shrink-0"
-                  title="Editar"
-                >
-                  <Pencil size={15} />
-                </button>
+                {!isReadonly && (
+                  <button
+                    onClick={() => startEdit(cat)}
+                    className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all flex-shrink-0"
+                    title="Editar"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                )}
               </div>
             )}
           </div>

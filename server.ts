@@ -43,7 +43,9 @@ async function startServer() {
     try {
       console.log('Connecting to database...');
       const result = await pool.query(
-        'SELECT id_usuario, nome, email FROM usuarios WHERE email = $1 AND senha = $2 AND ativo = true',
+        `SELECT id_usuario, nome, email,
+                COALESCE(perfil, 'admin') as perfil
+         FROM usuarios WHERE email = $1 AND senha = $2 AND ativo = true`,
         [email, password]
       );
       console.log('Query executed, rows found:', result.rows.length);
