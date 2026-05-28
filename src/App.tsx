@@ -57,6 +57,7 @@ export default function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false); // Mobile closed by default
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [banks, setBanks] = useState<{ id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -65,12 +66,16 @@ export default function App() {
   const [totalRecords, setTotalRecords] = useState(0);
   const PAGE_SIZE = 50;
 
-  // Fetch categories on login
+  // Fetch categories and banks on login
   useEffect(() => {
     if (!user) return;
     fetch(`${API_URL}/api/categories`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : [])
       .then(data => setCategories(data))
+      .catch(() => {});
+    fetch(`${API_URL}/api/banks`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setBanks(data))
       .catch(() => {});
   }, [user]);
 
@@ -314,6 +319,7 @@ export default function App() {
             {activeTab === 'categories' && (
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} />
             )}
+            {activeTab === 'banks' && <BankList banks={banks} />}
           </AnimatePresence>
         </div>
       </main>
@@ -998,6 +1004,46 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+function BankList({ banks }: { banks: { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[] }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
+    >
+      {banks.length === 0 ? (
+        <div className="p-12 text-center">
+          <PiggyBank className="mx-auto text-farm-green/20 mb-4" size={48} />
+          <p className="text-farm-green/40 font-medium italic">Nenhum banco cadastrado.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[500px]">
+            <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+              <tr className="text-xs uppercase tracking-widest text-farm-green/60">
+                <th className="px-6 py-4">Nome</th>
+                <th className="px-6 py-4">Agência</th>
+                <th className="px-6 py-4">Conta</th>
+                <th className="px-6 py-4">Cidade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-farm-green/5">
+              {banks.map(bank => (
+                <tr key={bank.id_banco} className="hover:bg-farm-cream/20 transition-colors">
+                  <td className="px-6 py-4 font-bold text-sm uppercase">{bank.nome}</td>
+                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.numero_agencia || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.numero_conta || '—'}</td>
+                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.cidade || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </motion.div>
   );
 }
 
