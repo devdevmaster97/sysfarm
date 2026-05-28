@@ -350,7 +350,7 @@ export default function App() {
             <div className="overflow-hidden">
               <p className="text-sm font-bold truncate text-farm-cream">{user.nome}</p>
               <p className="text-[10px] text-farm-cream/50 truncate uppercase tracking-widest">
-                {user.perfil === 'readonly' ? 'Somente Leitura' : 'Admin'}
+                {user.perfil}
               </p>
             </div>
           </div>
