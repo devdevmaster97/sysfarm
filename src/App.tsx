@@ -55,25 +55,26 @@ const PWA_DISMISSED_KEY = 'sysfarm_pwa_dismissed';
 function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [show, setShow] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [browser, setBrowser] = useState<'ios' | 'samsung' | 'chrome' | 'other'>('other');
 
   useEffect(() => {
-    // Já instalado como PWA — não mostrar
     if (window.matchMedia('(display-mode: standalone)').matches) return;
-    // Usuário já dispensou
     if (localStorage.getItem(PWA_DISMISSED_KEY)) return;
 
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    setIsIOS(ios);
+    const ua = navigator.userAgent;
+    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    const samsung = /SamsungBrowser/i.test(ua);
 
-    // Captura o evento nativo do Chrome/Android quando disponível
+    if (ios) setBrowser('ios');
+    else if (samsung) setBrowser('samsung');
+    else setBrowser('chrome');
+
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      setBrowser('chrome');
     };
     window.addEventListener('beforeinstallprompt', handler as any);
-
-    // Mostra o banner após 1.5s independente do beforeinstallprompt
     const timer = setTimeout(() => setShow(true), 1500);
 
     return () => {
@@ -88,16 +89,38 @@ function PWAInstallBanner() {
       await deferredPrompt.userChoice;
       setDeferredPrompt(null);
     }
-    setShow(false);
-    localStorage.setItem(PWA_DISMISSED_KEY, '1');
+    dismiss();
   };
 
-  const handleDismiss = () => {
+  const dismiss = () => {
     localStorage.setItem(PWA_DISMISSED_KEY, '1');
     setShow(false);
   };
 
   if (!show) return null;
+
+  const instructions: Record<string, React.ReactNode> = {
+    ios: (
+      <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+        No Safari, toque em <Share size={11} className="inline mx-0.5 mb-0.5" /> e depois <strong>"Adicionar à Tela de Início"</strong>.
+      </p>
+    ),
+    samsung: (
+      <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+        Toque no menu <strong>⋮</strong> do Samsung Internet e selecione <strong>"Adicionar página à Tela inicial"</strong>.
+      </p>
+    ),
+    chrome: deferredPrompt ? null : (
+      <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+        Toque no menu <strong>⋮</strong> do Chrome e selecione <strong>"Adicionar à tela inicial"</strong> ou <strong>"Instalar app"</strong>.
+      </p>
+    ),
+    other: (
+      <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+        Use o menu do navegador e selecione <strong>"Instalar app"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+      </p>
+    ),
+  };
 
   return (
     <AnimatePresence>
@@ -113,42 +136,21 @@ function PWAInstallBanner() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm">Instalar SysFarm</p>
-            {isIOS ? (
-              <>
-                <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
-                  No Safari, toque em <Share size={11} className="inline mx-0.5 mb-0.5" /> e depois <strong>"Adicionar à Tela de Início"</strong>.
-                </p>
-                <button onClick={handleDismiss} className="mt-2 text-farm-cream/60 text-xs underline">
-                  Entendi
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="text-farm-cream/80 text-xs mt-1">
-                  Acesse rapidamente como app, mesmo sem internet.
-                </p>
-                <div className="flex gap-2 mt-2">
-                  {deferredPrompt ? (
-                    <button
-                      onClick={handleInstall}
-                      className="flex items-center gap-1.5 bg-farm-cream text-farm-green px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-farm-cream/90 transition-colors"
-                    >
-                      <Download size={12} />
-                      Instalar
-                    </button>
-                  ) : (
-                    <p className="text-farm-cream/60 text-xs italic">
-                      Use o menu do navegador → "Instalar app"
-                    </p>
-                  )}
-                </div>
-              </>
+            {instructions[browser]}
+            {browser === 'chrome' && deferredPrompt && (
+              <button
+                onClick={handleInstall}
+                className="mt-2 flex items-center gap-1.5 bg-farm-cream text-farm-green px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-farm-cream/90 transition-colors"
+              >
+                <Download size={12} />
+                Instalar agora
+              </button>
             )}
+            <button onClick={dismiss} className="mt-2 block text-farm-cream/50 text-xs underline">
+              Fechar
+            </button>
           </div>
-          <button
-            onClick={handleDismiss}
-            className="text-farm-cream/50 hover:text-farm-cream transition-colors flex-shrink-0 p-1"
-          >
+          <button onClick={dismiss} className="text-farm-cream/50 hover:text-farm-cream transition-colors flex-shrink-0 p-1">
             <X size={16} />
           </button>
         </div>
