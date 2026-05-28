@@ -22,7 +22,9 @@ import {
   Trash2,
   Check,
   Eye,
-  EyeOff
+  EyeOff,
+  Download,
+  Share
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -46,6 +48,101 @@ interface Expense {
   valor: number;
   natureza: 'D' | 'C';
   id_categoria_caixa: number;
+}
+
+const PWA_DISMISSED_KEY = 'sysfarm_pwa_dismissed';
+
+function PWAInstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [show, setShow] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [installed, setInstalled] = useState(false);
+
+  useEffect(() => {
+    // Já está rodando como PWA instalado
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setInstalled(true);
+      return;
+    }
+    // Usuário já dispensou antes
+    if (localStorage.getItem(PWA_DISMISSED_KEY)) return;
+
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(ios);
+
+    if (ios) {
+      // iOS não tem beforeinstallprompt — mostra instruções manuais
+      setTimeout(() => setShow(true), 2000);
+    } else {
+      const handler = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        setShow(true);
+      };
+      window.addEventListener('beforeinstallprompt', handler as any);
+      return () => window.removeEventListener('beforeinstallprompt', handler as any);
+    }
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') setInstalled(true);
+    setShow(false);
+    setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem(PWA_DISMISSED_KEY, '1');
+    setShow(false);
+  };
+
+  if (!show || installed) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 100, opacity: 0 }}
+        className="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto"
+      >
+        <div className="bg-farm-green text-farm-cream rounded-2xl shadow-2xl p-4 flex gap-3 items-start">
+          <div className="bg-farm-cream/20 p-2 rounded-xl flex-shrink-0 mt-0.5">
+            <Coffee size={20} className="text-farm-cream" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-sm">Instalar SysFarm</p>
+            {isIOS ? (
+              <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+                Toque em <Share size={11} className="inline mx-0.5" /> <strong>Compartilhar</strong> e depois <strong>"Adicionar à Tela de Início"</strong> para instalar.
+              </p>
+            ) : (
+              <p className="text-farm-cream/80 text-xs mt-1">
+                Instale o app para acesso rápido, mesmo sem internet.
+              </p>
+            )}
+            {!isIOS && (
+              <button
+                onClick={handleInstall}
+                className="mt-2 flex items-center gap-1.5 bg-farm-cream text-farm-green px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-farm-cream/90 transition-colors"
+              >
+                <Download size={13} />
+                Instalar agora
+              </button>
+            )}
+          </div>
+          <button
+            onClick={handleDismiss}
+            className="text-farm-cream/60 hover:text-farm-cream transition-colors flex-shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
 }
 
 export default function App() {
@@ -155,10 +252,15 @@ export default function App() {
   };
 
   if (!user) {
-    return <LoginScreen onLogin={(u) => {
-      localStorage.setItem('sysfarm_user', JSON.stringify(u));
-      setUser(u);
-    }} />;
+    return (
+      <>
+        <LoginScreen onLogin={(u) => {
+          localStorage.setItem('sysfarm_user', JSON.stringify(u));
+          setUser(u);
+        }} />
+        <PWAInstallBanner />
+      </>
+    );
   }
 
   const menuItems = [
@@ -350,6 +452,7 @@ export default function App() {
           if (!editingExpense) setCurrentPage(1);
         }}
       />
+      <PWAInstallBanner />
     </div>
   );
 }
