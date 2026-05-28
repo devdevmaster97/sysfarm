@@ -56,41 +56,40 @@ function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [show, setShow] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    // Já está rodando como PWA instalado
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setInstalled(true);
-      return;
-    }
-    // Usuário já dispensou antes
+    // Já instalado como PWA — não mostrar
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    // Usuário já dispensou
     if (localStorage.getItem(PWA_DISMISSED_KEY)) return;
 
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     setIsIOS(ios);
 
-    if (ios) {
-      // iOS não tem beforeinstallprompt — mostra instruções manuais
-      setTimeout(() => setShow(true), 2000);
-    } else {
-      const handler = (e: Event) => {
-        e.preventDefault();
-        setDeferredPrompt(e);
-        setShow(true);
-      };
-      window.addEventListener('beforeinstallprompt', handler as any);
-      return () => window.removeEventListener('beforeinstallprompt', handler as any);
-    }
+    // Captura o evento nativo do Chrome/Android quando disponível
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler as any);
+
+    // Mostra o banner após 1.5s independente do beforeinstallprompt
+    const timer = setTimeout(() => setShow(true), 1500);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler as any);
+      clearTimeout(timer);
+    };
   }, []);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setInstalled(true);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+    }
     setShow(false);
-    setDeferredPrompt(null);
+    localStorage.setItem(PWA_DISMISSED_KEY, '1');
   };
 
   const handleDismiss = () => {
@@ -98,7 +97,7 @@ function PWAInstallBanner() {
     setShow(false);
   };
 
-  if (!show || installed) return null;
+  if (!show) return null;
 
   return (
     <AnimatePresence>
@@ -106,38 +105,51 @@ function PWAInstallBanner() {
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 100, opacity: 0 }}
-        className="fixed bottom-4 left-4 right-4 z-50 max-w-md mx-auto"
+        className="fixed bottom-4 left-4 right-4 z-[100] max-w-sm mx-auto"
       >
-        <div className="bg-farm-green text-farm-cream rounded-2xl shadow-2xl p-4 flex gap-3 items-start">
+        <div className="bg-farm-green text-farm-cream rounded-2xl shadow-2xl p-4 flex gap-3 items-start border border-farm-cream/10">
           <div className="bg-farm-cream/20 p-2 rounded-xl flex-shrink-0 mt-0.5">
             <Coffee size={20} className="text-farm-cream" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-bold text-sm">Instalar SysFarm</p>
             {isIOS ? (
-              <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
-                Toque em <Share size={11} className="inline mx-0.5" /> <strong>Compartilhar</strong> e depois <strong>"Adicionar à Tela de Início"</strong> para instalar.
-              </p>
+              <>
+                <p className="text-farm-cream/80 text-xs mt-1 leading-relaxed">
+                  No Safari, toque em <Share size={11} className="inline mx-0.5 mb-0.5" /> e depois <strong>"Adicionar à Tela de Início"</strong>.
+                </p>
+                <button onClick={handleDismiss} className="mt-2 text-farm-cream/60 text-xs underline">
+                  Entendi
+                </button>
+              </>
             ) : (
-              <p className="text-farm-cream/80 text-xs mt-1">
-                Instale o app para acesso rápido, mesmo sem internet.
-              </p>
-            )}
-            {!isIOS && (
-              <button
-                onClick={handleInstall}
-                className="mt-2 flex items-center gap-1.5 bg-farm-cream text-farm-green px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-farm-cream/90 transition-colors"
-              >
-                <Download size={13} />
-                Instalar agora
-              </button>
+              <>
+                <p className="text-farm-cream/80 text-xs mt-1">
+                  Acesse rapidamente como app, mesmo sem internet.
+                </p>
+                <div className="flex gap-2 mt-2">
+                  {deferredPrompt ? (
+                    <button
+                      onClick={handleInstall}
+                      className="flex items-center gap-1.5 bg-farm-cream text-farm-green px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-farm-cream/90 transition-colors"
+                    >
+                      <Download size={12} />
+                      Instalar
+                    </button>
+                  ) : (
+                    <p className="text-farm-cream/60 text-xs italic">
+                      Use o menu do navegador → "Instalar app"
+                    </p>
+                  )}
+                </div>
+              </>
             )}
           </div>
           <button
             onClick={handleDismiss}
-            className="text-farm-cream/60 hover:text-farm-cream transition-colors flex-shrink-0"
+            className="text-farm-cream/50 hover:text-farm-cream transition-colors flex-shrink-0 p-1"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
       </motion.div>
