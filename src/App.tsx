@@ -1254,7 +1254,77 @@ function FechamentoCaixa() {
     }
   };
 
-  const imprimir = () => window.print();
+  const imprimir = () => {
+    if (!data) return;
+    const formatBR = (iso: string) => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+    const fmtVal = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const linhas = data.rows.map(row => {
+      const saldo = parseFloat(row.saldo);
+      const label = saldo > 0 ? 'C' : saldo < 0 ? 'D' : '';
+      const cor = saldo > 0 ? '#16a34a' : saldo < 0 ? '#dc2626' : '#999';
+      return `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:6px 8px;font-weight:900;color:${cor};width:24px;">${label}</td>
+          <td style="padding:6px 4px;color:#999;font-size:12px;">${row.id_banco}</td>
+          <td style="padding:6px 4px;font-weight:700;text-transform:uppercase;font-size:13px;">${row.nome}</td>
+          <td style="padding:6px 8px;color:#666;font-size:12px;">${row.numero_agencia || '—'}</td>
+          <td style="padding:6px 8px;color:#666;font-size:12px;">${row.numero_conta || '—'}</td>
+          <td style="padding:6px 12px;text-align:right;font-weight:900;color:${cor};font-size:13px;">${fmtVal(saldo)}</td>
+        </tr>`;
+    }).join('');
+
+    const total = data.total;
+    const totalCor = total >= 0 ? '#16a34a' : '#dc2626';
+    const totalLabel = total >= 0 ? 'C' : 'D';
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>Fechamento do Caixa — ${formatBR(data.dataFim)}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 32px; }
+        h2 { font-size: 20px; font-weight: 900; letter-spacing: 0.02em; margin-bottom: 4px; }
+        .sub { color: #666; font-size: 12px; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        thead tr { background: #f5f5f0; border-bottom: 2px solid #ccc; }
+        thead th { padding: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #666; text-align: left; }
+        tfoot tr { border-top: 2px solid #333; background: #f5f5f0; }
+        tfoot td { padding: 10px 8px; font-weight: 900; font-size: 14px; }
+        @page { margin: 1.5cm; }
+      </style>
+    </head><body>
+      <h2>FECHAMENTO DO CAIXA</h2>
+      <p class="sub">Saldo acumulado até ${formatBR(data.dataFim)} &nbsp;·&nbsp; Gerado em ${formatBR(new Date().toISOString().split('T')[0])}</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:24px;"></th>
+            <th style="width:32px;">#</th>
+            <th>Banco</th>
+            <th>Agência</th>
+            <th>Conta</th>
+            <th style="text-align:right;">Saldo</th>
+          </tr>
+        </thead>
+        <tbody>${linhas}</tbody>
+        <tfoot>
+          <tr>
+            <td style="color:${totalCor};">${totalLabel}</td>
+            <td colspan="4">SALDO TOTAL</td>
+            <td style="text-align:right;color:${totalCor};">${fmtVal(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 400);
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
