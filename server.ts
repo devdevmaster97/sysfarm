@@ -256,8 +256,11 @@ async function startServer() {
   app.get("/api/dashboard/summary", async (req: Request, res: Response) => {
     try {
       const now = new Date();
-      const startDate = req.query.startDate as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      const endDate   = req.query.endDate   as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const lastDay = new Date(y, m, 0).getDate();
+      const startDate = req.query.startDate as string || `${y}-${String(m).padStart(2, '0')}-01`;
+      const endDate   = req.query.endDate   as string || `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const result = await pool.query(`
         SELECT
@@ -296,8 +299,11 @@ async function startServer() {
   app.get("/api/dashboard/by-category", async (req: Request, res: Response) => {
     try {
       const now = new Date();
-      const startDate = req.query.startDate as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-      const endDate   = req.query.endDate   as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const lastDay = new Date(y, m, 0).getDate();
+      const startDate = req.query.startDate as string || `${y}-${String(m).padStart(2, '0')}-01`;
+      const endDate   = req.query.endDate   as string || `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const result = await pool.query(`
         SELECT
