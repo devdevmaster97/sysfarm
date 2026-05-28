@@ -58,6 +58,10 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const PAGE_SIZE = 50;
 
   // Fetch categories on login
   useEffect(() => {
@@ -68,17 +72,27 @@ export default function App() {
       .catch(() => {});
   }, [user]);
 
-  // Fetch transactions when expenses tab is active
+  // Fetch transactions when expenses tab is active or page changes
   useEffect(() => {
     if (activeTab === 'expenses' && user) {
-      fetchTransactions();
+      fetchTransactions(currentPage);
     }
-  }, [activeTab, user]);
+  }, [activeTab, user, currentPage]);
 
-  const fetchTransactions = async () => {
+  // Reset page when leaving expenses tab
+  useEffect(() => {
+    if (activeTab !== 'expenses') setCurrentPage(1);
+  }, [activeTab]);
+
+  const fetchTransactions = async (page = 1) => {
     try {
-      const res = await fetch(`${API_URL}/api/transactions`, { credentials: 'include' });
-      if (res.ok) setExpenses(await res.json());
+      const res = await fetch(`${API_URL}/api/transactions?page=${page}&limit=${PAGE_SIZE}`, { credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        setExpenses(json.data ?? json);
+        setTotalPages(json.totalPages ?? 1);
+        setTotalRecords(json.total ?? 0);
+      }
     } catch (err) {
       console.error("Erro ao buscar lançamentos.");
     }
@@ -90,7 +104,7 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/transactions/${id}`, {
         method: 'DELETE', credentials: 'include'
       });
-      if (res.ok) setExpenses(prev => prev.filter(e => e.id_caixa !== id));
+      if (res.ok) fetchTransactions(currentPage);
     } catch (err) {
       console.error('Erro ao excluir lançamento.');
     }
@@ -289,6 +303,10 @@ export default function App() {
                 categories={categories}
                 onEdit={(exp) => { setEditingExpense(exp); setExpenseModalOpen(true); }}
                 onDelete={handleDeleteExpense}
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalRecords={totalRecords}
+                onPageChange={setCurrentPage}
               />
             )}
             {activeTab === 'categories' && (
@@ -304,14 +322,11 @@ export default function App() {
         onClose={() => { setExpenseModalOpen(false); setEditingExpense(null); }}
         categories={categories}
         expense={editingExpense}
-        onSave={(saved) => {
-          if (editingExpense) {
-            setExpenses(prev => prev.map(e => e.id_caixa === saved.id_caixa ? saved : e));
-          } else {
-            setExpenses(prev => [saved, ...prev]);
-          }
+        onSave={() => {
           setExpenseModalOpen(false);
           setEditingExpense(null);
+          fetchTransactions(editingExpense ? currentPage : 1);
+          if (!editingExpense) setCurrentPage(1);
         }}
       />
     </div>
@@ -514,11 +529,15 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList({ expenses, categories, onEdit, onDelete }: {
+function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange }: {
   expenses: Expense[];
   categories: Category[];
   onEdit: (exp: Expense) => void;
   onDelete: (id: number) => void;
+  currentPage: number;
+  totalPages: number;
+  totalRecords: number;
+  onPageChange: (page: number) => void;
 }) {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -601,6 +620,67 @@ function ExpenseList({ expenses, categories, onEdit, onDelete }: {
           </table>
         </div>
       )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-farm-green/10 bg-farm-cream/30">
+          <span className="text-xs text-farm-green/50 font-medium">
+            {totalRecords.toLocaleString('pt-BR')} registros · Página {currentPage} de {totalPages}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(1)}
+              disabled={currentPage === 1}
+              className="px-2 py-1 text-xs font-bold text-farm-green disabled:opacity-30 hover:bg-farm-cream rounded-lg transition-all"
+            >
+              «
+            </button>
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-xs font-bold text-farm-green disabled:opacity-30 hover:bg-farm-cream rounded-lg transition-all"
+            >
+              ‹ Anterior
+            </button>
+
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let p: number;
+              if (totalPages <= 5) p = i + 1;
+              else if (currentPage <= 3) p = i + 1;
+              else if (currentPage >= totalPages - 2) p = totalPages - 4 + i;
+              else p = currentPage - 2 + i;
+              return (
+                <button
+                  key={p}
+                  onClick={() => onPageChange(p)}
+                  className={`w-8 h-8 text-xs font-bold rounded-lg transition-all ${
+                    p === currentPage
+                      ? 'bg-farm-green text-farm-cream shadow'
+                      : 'text-farm-green hover:bg-farm-cream'
+                  }`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-xs font-bold text-farm-green disabled:opacity-30 hover:bg-farm-cream rounded-lg transition-all"
+            >
+              Próxima ›
+            </button>
+            <button
+              onClick={() => onPageChange(totalPages)}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 text-xs font-bold text-farm-green disabled:opacity-30 hover:bg-farm-cream rounded-lg transition-all"
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -609,7 +689,7 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
   isOpen: boolean; 
   onClose: () => void; 
   categories: Category[];
-  onSave: (expense: Expense) => void;
+  onSave: () => void;
   expense?: Expense | null;
 }) {
   const isEditing = !!expense;
@@ -667,8 +747,7 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        onSave(isEditing ? data.data : data.expense);
+        onSave();
       } else {
         setError('Erro ao salvar lançamento.');
       }

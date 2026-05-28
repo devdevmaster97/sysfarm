@@ -152,41 +152,43 @@ async function startServer() {
 
   app.get("/api/transactions", async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, categoria, natureza } = req.query;
-      let query = `
-        SELECT c.*, cat.descricao as categoria_nome 
-        FROM caixa c
-        LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
-        WHERE 1=1
-      `;
+      const { startDate, endDate, categoria, natureza, page, limit } = req.query;
+      const pageNum = Math.max(1, parseInt(String(page || '1'), 10));
+      const limitNum = Math.min(200, Math.max(1, parseInt(String(limit || '50'), 10)));
+      const offset = (pageNum - 1) * limitNum;
+
+      let whereClause = 'WHERE 1=1';
       const params: any[] = [];
       let paramCount = 1;
 
-      if (startDate) {
-        query += ` AND c.data_lancamento >= $${paramCount}`;
-        params.push(startDate);
-        paramCount++;
-      }
-      if (endDate) {
-        query += ` AND c.data_lancamento <= $${paramCount}`;
-        params.push(endDate);
-        paramCount++;
-      }
-      if (categoria) {
-        query += ` AND c.id_categoria_caixa = $${paramCount}`;
-        params.push(categoria);
-        paramCount++;
-      }
-      if (natureza) {
-        query += ` AND c.natureza = $${paramCount}`;
-        params.push(natureza);
-        paramCount++;
-      }
+      if (startDate) { whereClause += ` AND c.data_lancamento >= $${paramCount++}`; params.push(startDate); }
+      if (endDate)   { whereClause += ` AND c.data_lancamento <= $${paramCount++}`; params.push(endDate); }
+      if (categoria) { whereClause += ` AND c.id_categoria_caixa = $${paramCount++}`; params.push(categoria); }
+      if (natureza)  { whereClause += ` AND c.natureza = $${paramCount++}`; params.push(natureza); }
 
-      query += ' ORDER BY c.data_lancamento DESC, c.id_caixa DESC LIMIT 100';
+      const countResult = await pool.query(
+        `SELECT COUNT(*) as total FROM caixa c ${whereClause}`,
+        params
+      );
+      const total = parseInt(countResult.rows[0].total, 10);
 
-      const result = await pool.query(query, params);
-      res.json(result.rows);
+      const dataResult = await pool.query(
+        `SELECT c.*, cat.descricao as categoria_nome
+         FROM caixa c
+         LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+         ${whereClause}
+         ORDER BY c.data_lancamento DESC, c.id_caixa DESC
+         LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
+        [...params, limitNum, offset]
+      );
+
+      res.json({
+        data: dataResult.rows,
+        total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        limit: limitNum
+      });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
     }
