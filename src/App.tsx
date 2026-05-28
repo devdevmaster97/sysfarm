@@ -453,69 +453,137 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
 }
 
 function Dashboard() {
+  const [summary, setSummary] = useState<{ total_creditos: number; total_debitos: number; saldo_liquido: number; total_lancamentos: number } | null>(null);
+  const [recent, setRecent] = useState<any[]>([]);
+  const [byCategory, setByCategory] = useState<{ categoria: string; total: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const now = new Date();
+  const monthName = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v ?? 0);
+
+  const formatDate = (d: string) => {
+    const p = String(d).split('T')[0].split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}` : d;
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetch(`${API_URL}/api/dashboard/summary`, { credentials: 'include' }).then(r => r.json()),
+      fetch(`${API_URL}/api/dashboard/recent`,   { credentials: 'include' }).then(r => r.json()),
+      fetch(`${API_URL}/api/dashboard/by-category`, { credentials: 'include' }).then(r => r.json()),
+    ]).then(([s, r, c]) => {
+      setSummary(s);
+      setRecent(Array.isArray(r) ? r : []);
+      setByCategory(Array.isArray(c) ? c : []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const maxCategoria = byCategory.length > 0 ? Math.max(...byCategory.map(c => c.total)) : 1;
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       className="space-y-8"
     >
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard 
-          title="Entradas (Mês)" 
-          value="R$ 85.200" 
-          icon={ArrowUpCircle} 
+        <StatCard
+          title={`Entradas — ${monthName}`}
+          value={loading ? '...' : fmt(summary?.total_creditos ?? 0)}
+          icon={ArrowUpCircle}
           color="text-emerald-600"
-          trend="+12% que mês passado"
+          trend={`${summary?.total_lancamentos ?? 0} lançamentos no mês`}
         />
-        <StatCard 
-          title="Saídas (Mês)" 
-          value="R$ 42.150" 
-          icon={ArrowDownCircle} 
+        <StatCard
+          title={`Saídas — ${monthName}`}
+          value={loading ? '...' : fmt(summary?.total_debitos ?? 0)}
+          icon={ArrowDownCircle}
           color="text-rose-600"
-          trend="-5% que mês passado"
+          trend="Total de despesas"
         />
-        <StatCard 
-          title="Saldo Líquido" 
-          value="R$ 43.050" 
-          icon={Wallet} 
-          color="text-farm-green"
-          trend="Resultado operacional"
+        <StatCard
+          title="Saldo Líquido"
+          value={loading ? '...' : fmt(summary?.saldo_liquido ?? 0)}
+          icon={Wallet}
+          color={(summary?.saldo_liquido ?? 0) >= 0 ? 'text-farm-green' : 'text-rose-600'}
+          trend="Entradas menos saídas"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Activity */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
           <h3 className="text-xl font-serif font-bold mb-6 flex items-center gap-2">
             <Calendar size={20} className="text-farm-green" />
             Atividade Recente
           </h3>
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="flex items-center justify-between p-4 bg-farm-cream/30 rounded-2xl">
-                <div className="flex gap-4 items-center">
-                  <div className="p-2 bg-white rounded-xl">
-                    <Receipt size={18} className="text-farm-green" />
+          {loading ? (
+            <div className="space-y-3">
+              {[1,2,3,4].map(i => <div key={i} className="h-16 bg-farm-cream/40 rounded-2xl animate-pulse" />)}
+            </div>
+          ) : recent.length === 0 ? (
+            <p className="text-farm-green/40 text-sm italic text-center py-8">Nenhum lançamento encontrado.</p>
+          ) : (
+            <div className="space-y-3">
+              {recent.map((item, i) => (
+                <div key={i} className="flex items-center justify-between p-4 bg-farm-cream/30 rounded-2xl hover:bg-farm-cream/50 transition-colors">
+                  <div className="flex gap-3 items-center min-w-0">
+                    <div className={`p-2 rounded-xl flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+                      {item.natureza === 'D'
+                        ? <ArrowDownCircle size={16} className="text-rose-500" />
+                        : <ArrowUpCircle size={16} className="text-emerald-500" />
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm truncate uppercase">{item.historico}</p>
+                      <p className="text-xs text-farm-green/60 truncate">{item.categoria_nome ?? '—'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">Adubo NPK 20-00-20</p>
-                    <p className="text-xs text-farm-green/60">Insumos e Fertilizantes</p>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <p className={`font-bold text-sm ${item.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {item.natureza === 'D' ? '- ' : '+ '}{fmt(item.valor)}
+                    </p>
+                    <p className="text-[10px] uppercase font-bold text-farm-green/40 tracking-widest">{formatDate(item.data_lancamento)}</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-rose-600">- R$ 1.250,00</p>
-                  <p className="text-[10px] uppercase font-bold text-farm-green/40 tracking-widest">12 Mai</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* By Category */}
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
-          <h3 className="text-xl font-serif font-bold mb-6">Despesas por Categoria</h3>
-          <div className="flex flex-col justify-center items-center h-64 border-2 border-dashed border-farm-green/10 rounded-2xl">
-            <p className="text-farm-green/40 text-sm italic">Gráfico de distribuição (Mock)</p>
-          </div>
+          <h3 className="text-xl font-serif font-bold mb-1">Despesas por Categoria</h3>
+          <p className="text-xs text-farm-green/40 mb-5 italic capitalize">{monthName}</p>
+          {loading ? (
+            <div className="space-y-3">
+              {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-farm-cream/40 rounded-xl animate-pulse" />)}
+            </div>
+          ) : byCategory.length === 0 ? (
+            <p className="text-farm-green/40 text-sm italic text-center py-8">Nenhuma despesa no mês.</p>
+          ) : (
+            <div className="space-y-3 overflow-y-auto max-h-80 pr-1">
+              {byCategory.map((c, i) => (
+                <div key={i}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-xs font-bold uppercase tracking-tight text-farm-brown truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
+                    <span className="text-xs font-black text-rose-600 flex-shrink-0">{fmt(c.total)}</span>
+                  </div>
+                  <div className="h-2 bg-farm-cream rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-farm-green rounded-full transition-all"
+                      style={{ width: `${Math.round((c.total / maxCategoria) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>

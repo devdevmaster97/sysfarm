@@ -252,29 +252,67 @@ async function startServer() {
     }
   });
 
-  // Dashboard summary
+  // Dashboard summary — defaults to current month
   app.get("/api/dashboard/summary", async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate } = req.query;
-      let dateFilter = '';
-      const params: any[] = [];
-
-      if (startDate && endDate) {
-        dateFilter = 'WHERE data_lancamento BETWEEN $1 AND $2';
-        params.push(startDate, endDate);
-      }
+      const now = new Date();
+      const startDate = req.query.startDate as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const endDate   = req.query.endDate   as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
 
       const result = await pool.query(`
-        SELECT 
-          SUM(CASE WHEN natureza = 'C' THEN valor ELSE 0 END) as total_creditos,
-          SUM(CASE WHEN natureza = 'D' THEN valor ELSE 0 END) as total_debitos,
-          SUM(CASE WHEN natureza = 'C' THEN valor ELSE -valor END) as saldo_liquido,
+        SELECT
+          COALESCE(SUM(CASE WHEN natureza = 'C' THEN valor ELSE 0 END), 0) as total_creditos,
+          COALESCE(SUM(CASE WHEN natureza = 'D' THEN valor ELSE 0 END), 0) as total_debitos,
+          COALESCE(SUM(CASE WHEN natureza = 'C' THEN valor ELSE -valor END), 0) as saldo_liquido,
           COUNT(*) as total_lancamentos
         FROM caixa
-        ${dateFilter}
-      `, params);
+        WHERE data_lancamento BETWEEN $1 AND $2
+      `, [startDate, endDate]);
 
       res.json(result.rows[0]);
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
+  // Dashboard recent transactions
+  app.get("/api/dashboard/recent", async (req: Request, res: Response) => {
+    try {
+      const result = await pool.query(`
+        SELECT c.id_caixa, c.data_lancamento, c.historico, c.valor, c.natureza,
+               cat.descricao as categoria_nome
+        FROM caixa c
+        LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+        ORDER BY c.data_lancamento DESC, c.id_caixa DESC
+        LIMIT 8
+      `);
+      res.json(result.rows);
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
+  // Dashboard expenses by category — current month
+  app.get("/api/dashboard/by-category", async (req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const startDate = req.query.startDate as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const endDate   = req.query.endDate   as string || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+
+      const result = await pool.query(`
+        SELECT
+          cat.descricao as categoria,
+          COALESCE(SUM(c.valor), 0) as total
+        FROM caixa c
+        LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+        WHERE c.natureza = 'D'
+          AND c.data_lancamento BETWEEN $1 AND $2
+        GROUP BY cat.descricao
+        ORDER BY total DESC
+        LIMIT 10
+      `, [startDate, endDate]);
+
+      res.json(result.rows);
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
     }
