@@ -534,6 +534,12 @@ function ExpenseList({ expenses, categories, onEdit, onDelete }: {
   const getCategoryName = (id: number) =>
     categories.find(c => c.id_categoria_caixa === id)?.descricao ?? `Cat. ${id}`;
 
+  const sortedExpenses = [...expenses].sort((a, b) => {
+    const da = String(a.data_lancamento).split('T')[0];
+    const db = String(b.data_lancamento).split('T')[0];
+    return db.localeCompare(da) || (b.id_caixa - a.id_caixa);
+  });
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -559,7 +565,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete }: {
               </tr>
             </thead>
             <tbody className="divide-y divide-farm-green/5">
-              {expenses.map(expense => (
+              {sortedExpenses.map(expense => (
                 <tr key={expense.id_caixa} className="hover:bg-farm-cream/20 transition-colors group">
                   <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">{formatDate(expense.data_lancamento)}</td>
                   <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
