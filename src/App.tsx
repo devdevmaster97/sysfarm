@@ -172,6 +172,7 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -216,15 +217,17 @@ export default function App() {
     }
   };
 
-  const handleDeleteExpense = async (id: number) => {
-    if (!window.confirm('Confirma a exclusão deste lançamento?')) return;
+  const confirmDeleteExpense = async () => {
+    if (deletingExpenseId === null) return;
     try {
-      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+      const res = await fetch(`${API_URL}/api/transactions/${deletingExpenseId}`, {
         method: 'DELETE', credentials: 'include'
       });
       if (res.ok) fetchTransactions(currentPage);
     } catch (err) {
       console.error('Erro ao excluir lançamento.');
+    } finally {
+      setDeletingExpenseId(null);
     }
   };
 
@@ -437,7 +440,7 @@ export default function App() {
                 expenses={expenses}
                 categories={categories}
                 onEdit={(exp) => { setEditingExpense(exp); setExpenseModalOpen(true); }}
-                onDelete={handleDeleteExpense}
+                onDelete={(id) => setDeletingExpenseId(id)}
                 currentPage={currentPage}
                 totalPages={totalPages}
                 totalRecords={totalRecords}
@@ -466,6 +469,13 @@ export default function App() {
           if (!editingExpense) setCurrentPage(1);
         }}
       />
+      {/* Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deletingExpenseId !== null}
+        onConfirm={confirmDeleteExpense}
+        onCancel={() => setDeletingExpenseId(null)}
+      />
+
       <PWAInstallBanner />
     </div>
   );
@@ -1199,6 +1209,63 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
 }
 
 type BankRow = { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string };
+
+function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) setTimeout(() => cancelRef.current?.focus(), 50);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onCancel}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center"
+        >
+          <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Trash2 size={26} className="text-rose-500" />
+          </div>
+          <h3 className="font-serif text-xl font-bold text-farm-brown mb-2">Excluir lançamento?</h3>
+          <p className="text-sm text-farm-green/60 mb-8">
+            Esta ação não pode ser desfeita. O lançamento será removido permanentemente.
+          </p>
+          <div className="flex gap-3">
+            <button
+              ref={cancelRef}
+              onClick={onCancel}
+              className="flex-1 px-4 py-3 border-2 border-farm-green/20 text-farm-green rounded-2xl font-bold hover:bg-farm-cream transition-colors focus:outline-none focus:ring-2 focus:ring-farm-green/30"
+            >
+              Não, manter
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 px-4 py-3 bg-rose-500 text-white rounded-2xl font-bold hover:bg-rose-600 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-300"
+            >
+              Sim, excluir
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 function BankList({ banks, onUpdate }: { banks: BankRow[]; onUpdate: (id: number, fields: Omit<BankRow, 'id_banco'>) => void }) {
   const [editingId, setEditingId] = useState<number | null>(null);
