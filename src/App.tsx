@@ -521,8 +521,11 @@ function ExpenseList({ expenses, categories, onEdit, onDelete }: {
   onDelete: (id: number) => void;
 }) {
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00');
-    return date.toLocaleDateString('pt-BR');
+    if (!dateStr) return '';
+    const datePart = String(dateStr).split('T')[0];
+    const parts = datePart.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
   const formatCurrency = (value: number) =>
