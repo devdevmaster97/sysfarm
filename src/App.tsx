@@ -341,6 +341,7 @@ export default function App() {
         isOpen={isExpenseModalOpen}
         onClose={() => { setExpenseModalOpen(false); setEditingExpense(null); }}
         categories={categories}
+        banks={banks}
         expense={editingExpense}
         onSave={() => {
           setExpenseModalOpen(false);
@@ -820,10 +821,11 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
   );
 }
 
-function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: { 
+function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: { 
   isOpen: boolean; 
   onClose: () => void; 
   categories: Category[];
+  banks: { id_banco: number; nome: string }[];
   onSave: () => void;
   expense?: Expense | null;
 }) {
@@ -834,7 +836,8 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
     historico: '',
     valor: '',
     natureza: 'D' as 'D' | 'C',
-    id_categoria_caixa: ''
+    id_categoria_caixa: '',
+    id_banco: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -842,11 +845,12 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
   useEffect(() => {
     if (expense) {
       setFormData({
-        data_lancamento: expense.data_lancamento.split('T')[0],
+        data_lancamento: String(expense.data_lancamento).split('T')[0],
         historico: expense.historico,
         valor: String(expense.valor),
         natureza: expense.natureza,
-        id_categoria_caixa: String(expense.id_categoria_caixa)
+        id_categoria_caixa: String(expense.id_categoria_caixa),
+        id_banco: (expense as any).id_banco ? String((expense as any).id_banco) : ''
       });
     } else {
       setFormData({
@@ -854,7 +858,8 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
         historico: '',
         valor: '',
         natureza: 'D',
-        id_categoria_caixa: ''
+        id_categoria_caixa: '',
+        id_banco: ''
       });
     }
   }, [expense, isOpen]);
@@ -877,7 +882,8 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
         body: JSON.stringify({
           ...formData,
           valor: parseFloat(formData.valor),
-          id_categoria_caixa: parseInt(formData.id_categoria_caixa)
+          id_categoria_caixa: parseInt(formData.id_categoria_caixa),
+          id_banco: formData.id_banco ? parseInt(formData.id_banco) : null
         })
       });
 
@@ -1032,6 +1038,24 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                Banco <span className="text-farm-green/40 font-normal normal-case">(opcional)</span>
+              </label>
+              <select
+                value={formData.id_banco}
+                onChange={(e) => setFormData({ ...formData, id_banco: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+              >
+                <option value="">Nenhum</option>
+                {banks.map(b => (
+                  <option key={b.id_banco} value={b.id_banco}>
+                    {b.nome}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex gap-4 pt-4">
