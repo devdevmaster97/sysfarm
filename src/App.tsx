@@ -302,10 +302,6 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 lg:gap-4">
-            <div className="hidden sm:flex flex-col items-end mr-2 lg:mr-4">
-              <span className="text-[10px] lg:text-xs font-semibold uppercase tracking-wider text-farm-green/60">Saldo Atual</span>
-              <span className="text-sm lg:text-lg font-bold">R$ 142.500,00</span>
-            </div>
             <button 
               onClick={() => setExpenseModalOpen(true)}
               className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
