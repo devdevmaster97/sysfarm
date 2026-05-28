@@ -24,7 +24,9 @@ import {
   Eye,
   EyeOff,
   Download,
-  Share
+  Share,
+  Printer,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -459,6 +461,7 @@ export default function App() {
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
             )}
             {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
+            {activeTab === 'reports' && <FechamentoCaixa />}
           </AnimatePresence>
         </div>
       </main>
@@ -1220,6 +1223,144 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
 }
 
 type BankRow = { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string };
+
+function FechamentoCaixa() {
+  const today = new Date().toISOString().split('T')[0];
+  const [dataFim, setDataFim] = useState(today);
+  const [data, setData] = useState<{ rows: any[]; total: number; dataFim: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fmt = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+  const formatDateBR = (iso: string) => {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
+  const buscar = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/reports/fechamento-caixa?dataFim=${dataFim}`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.status === 'error') { setError(json.detail || json.message); }
+      else setData(json);
+    } catch {
+      setError('Erro de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const imprimir = () => window.print();
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Filtro */}
+      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">
+            Saldo acumulado até a data
+          </label>
+          <input
+            type="date"
+            value={dataFim}
+            onChange={e => setDataFim(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium"
+          />
+        </div>
+        <button
+          onClick={buscar}
+          disabled={loading}
+          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2"
+        >
+          <FileText size={18} />
+          {loading ? 'Calculando...' : 'Gerar Relatório'}
+        </button>
+        {data && (
+          <button
+            onClick={imprimir}
+            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2"
+          >
+            <Printer size={18} />
+            Imprimir
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">
+          {error}
+        </div>
+      )}
+
+      {/* Relatório */}
+      {data && (
+        <div id="relatorio-fechamento" className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden print:shadow-none print:rounded-none print:border-0">
+          {/* Cabeçalho */}
+          <div className="bg-farm-green text-farm-cream px-8 py-6 print:bg-white print:text-black print:border-b-2 print:border-black">
+            <h2 className="font-serif text-2xl font-bold tracking-tight">FECHAMENTO DO CAIXA</h2>
+            <p className="text-farm-cream/70 text-sm mt-1 print:text-gray-600">
+              Saldo acumulado até {formatDateBR(data.dataFim)} &nbsp;·&nbsp; Gerado em {formatDateBR(today)}
+            </p>
+          </div>
+
+          {/* Tabela */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[600px]">
+              <thead className="bg-farm-cream/50 border-b-2 border-farm-green/10 print:bg-gray-100">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/60 print:text-gray-600">
+                  <th className="px-6 py-3 w-8"></th>
+                  <th className="px-2 py-3 w-10">#</th>
+                  <th className="px-2 py-3">Banco</th>
+                  <th className="px-4 py-3">Agência</th>
+                  <th className="px-4 py-3">Conta</th>
+                  <th className="px-6 py-3 text-right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-farm-green/5">
+                {data.rows.map((row, i) => {
+                  const saldo = parseFloat(row.saldo);
+                  const label = saldo > 0 ? 'C' : saldo < 0 ? 'D' : '';
+                  return (
+                    <tr key={i} className={`transition-colors ${saldo !== 0 ? 'hover:bg-farm-cream/20' : 'opacity-60'}`}>
+                      <td className={`px-6 py-3 text-xs font-black ${saldo > 0 ? 'text-emerald-600' : saldo < 0 ? 'text-rose-600' : 'text-transparent'}`}>
+                        {label}
+                      </td>
+                      <td className="px-2 py-3 text-sm text-farm-green/50">{row.id_banco}</td>
+                      <td className="px-2 py-3 text-sm font-bold uppercase">{row.nome}</td>
+                      <td className="px-4 py-3 text-sm text-farm-green/70">{row.numero_agencia || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-farm-green/70">{row.numero_conta || '—'}</td>
+                      <td className={`px-6 py-3 text-right font-black text-sm ${saldo > 0 ? 'text-emerald-700' : saldo < 0 ? 'text-rose-600' : 'text-farm-green/40'}`}>
+                        {fmt(Math.abs(saldo))}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {/* Rodapé total */}
+              <tfoot className="border-t-2 border-farm-green/20 bg-farm-cream/30">
+                <tr>
+                  <td className={`px-6 py-4 text-sm font-black ${data.total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {data.total >= 0 ? 'C' : 'D'}
+                  </td>
+                  <td colSpan={4} className="px-2 py-4 text-sm font-black uppercase tracking-wide text-farm-brown">
+                    SALDO TOTAL
+                  </td>
+                  <td className={`px-6 py-4 text-right text-lg font-black ${data.total >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {fmt(Math.abs(data.total))}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
   isOpen: boolean;

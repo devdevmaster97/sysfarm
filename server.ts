@@ -343,6 +343,37 @@ async function startServer() {
     }
   });
 
+  // Fechamento do Caixa — saldo acumulado por banco até a data informada
+  app.get("/api/reports/fechamento-caixa", async (req: Request, res: Response) => {
+    try {
+      const dataFim = req.query.dataFim as string || new Date().toISOString().split('T')[0];
+
+      const result = await pool.query(`
+        SELECT
+          b.id_banco,
+          b.nome,
+          b.numero_agencia,
+          b.numero_conta,
+          COALESCE(SUM(
+            CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor
+                 WHEN UPPER(TRIM(c.natureza)) = 'D' THEN -c.valor
+                 ELSE 0 END
+          ), 0) AS saldo
+        FROM banco b
+        LEFT JOIN caixa c
+          ON c.id_banco = b.id_banco
+          AND c.data_lancamento <= $1
+        GROUP BY b.id_banco, b.nome, b.numero_agencia, b.numero_conta
+        ORDER BY b.id_banco ASC
+      `, [dataFim]);
+
+      const total = result.rows.reduce((acc: number, r: any) => acc + parseFloat(r.saldo), 0);
+      res.json({ rows: result.rows, total, dataFim });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
