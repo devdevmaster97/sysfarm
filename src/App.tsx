@@ -20,7 +20,9 @@ import {
   Lock,
   Pencil,
   Trash2,
-  Check
+  Check,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -335,9 +337,12 @@ export default function App() {
 
 // --- Sub-components ---
 
+const SAVED_EMAIL_KEY = 'sysfarm_saved_email';
+
 function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => localStorage.getItem(SAVED_EMAIL_KEY) ?? '');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -347,22 +352,20 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     setError('');
 
     try {
-      console.log('Tentando login em:', `${API_URL}/api/login`);
       const res = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ email, password })
       });
-      console.log('Resposta recebida:', res.status);
       const data = await res.json();
       if (data.success) {
+        localStorage.setItem(SAVED_EMAIL_KEY, email);
         onLogin(data.user);
       } else {
         setError(data.message || 'Erro ao realizar login.');
       }
     } catch (err) {
-      console.error('Erro no login:', err);
       setError('Erro de conexão com o servidor.');
     } finally {
       setLoading(false);
@@ -415,12 +418,20 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
             <div className="relative">
               <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-farm-green/30" />
               <input 
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-farm-cream/50 border border-farm-green/10 rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-farm-green/20 focus:border-farm-green outline-none transition-all"
+                className="w-full bg-farm-cream/50 border border-farm-green/10 rounded-2xl py-4 pl-12 pr-12 focus:ring-2 focus:ring-farm-green/20 focus:border-farm-green outline-none transition-all"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-farm-green/30 hover:text-farm-green transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
