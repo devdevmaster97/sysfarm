@@ -117,6 +117,22 @@ export default function App() {
     }
   };
 
+  const handleUpdateBank = async (id: number, fields: { nome: string; numero_agencia: string; numero_conta: string; cidade: string }) => {
+    try {
+      const res = await fetch(`${API_URL}/api/banks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(fields)
+      });
+      if (res.ok) {
+        setBanks(prev => prev.map(b => b.id_banco === id ? { ...b, ...fields } : b));
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar banco.');
+    }
+  };
+
   const handleUpdateCategory = async (id: number, descricao: string) => {
     try {
       const res = await fetch(`${API_URL}/api/categories/${id}`, {
@@ -319,7 +335,7 @@ export default function App() {
             {activeTab === 'categories' && (
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} />
             )}
-            {activeTab === 'banks' && <BankList banks={banks} />}
+            {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} />}
           </AnimatePresence>
         </div>
       </main>
@@ -1045,7 +1061,32 @@ function ExpenseModal({ isOpen, onClose, categories, onSave, expense }: {
   );
 }
 
-function BankList({ banks }: { banks: { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[] }) {
+type BankRow = { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string };
+
+function BankList({ banks, onUpdate }: { banks: BankRow[]; onUpdate: (id: number, fields: Omit<BankRow, 'id_banco'>) => void }) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState({ nome: '', numero_agencia: '', numero_conta: '', cidade: '' });
+
+  const startEdit = (b: BankRow) => {
+    setEditingId(b.id_banco);
+    setForm({ nome: b.nome, numero_agencia: b.numero_agencia || '', numero_conta: b.numero_conta || '', cidade: b.cidade || '' });
+  };
+
+  const confirmEdit = (id: number) => {
+    if (form.nome.trim()) onUpdate(id, { ...form, nome: form.nome.trim().toUpperCase() });
+    setEditingId(null);
+  };
+
+  const field = (key: keyof typeof form, placeholder: string) => (
+    <input
+      value={form[key]}
+      onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(editingId!); if (e.key === 'Escape') setEditingId(null); }}
+      placeholder={placeholder}
+      className="w-full px-2 py-1 border-2 border-farm-green/30 rounded-lg text-sm font-medium focus:outline-none focus:border-farm-green"
+    />
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1059,22 +1100,55 @@ function BankList({ banks }: { banks: { id_banco: number; nome: string; numero_a
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[500px]">
+          <table className="w-full text-left min-w-[600px]">
             <thead className="bg-farm-cream/50 border-b border-farm-green/10">
               <tr className="text-xs uppercase tracking-widest text-farm-green/60">
                 <th className="px-6 py-4">Nome</th>
-                <th className="px-6 py-4">Agência</th>
-                <th className="px-6 py-4">Conta</th>
-                <th className="px-6 py-4">Cidade</th>
+                <th className="px-4 py-4">Agência</th>
+                <th className="px-4 py-4">Conta</th>
+                <th className="px-4 py-4">Cidade</th>
+                <th className="px-4 py-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-farm-green/5">
               {banks.map(bank => (
-                <tr key={bank.id_banco} className="hover:bg-farm-cream/20 transition-colors">
-                  <td className="px-6 py-4 font-bold text-sm uppercase">{bank.nome}</td>
-                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.numero_agencia || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.numero_conta || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-farm-green/70">{bank.cidade || '—'}</td>
+                <tr key={bank.id_banco} className="hover:bg-farm-cream/20 transition-colors group">
+                  {editingId === bank.id_banco ? (
+                    <>
+                      <td className="px-4 py-2">{field('nome', 'Nome')}</td>
+                      <td className="px-4 py-2">{field('numero_agencia', 'Agência')}</td>
+                      <td className="px-4 py-2">{field('numero_conta', 'Conta')}</td>
+                      <td className="px-4 py-2">{field('cidade', 'Cidade')}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => confirmEdit(bank.id_banco)} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Salvar">
+                            <Check size={16} />
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all" title="Cancelar">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-6 py-4 font-bold text-sm uppercase">{bank.nome}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.numero_agencia || '—'}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.numero_conta || '—'}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.cidade || '—'}</td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-center">
+                          <button
+                            onClick={() => startEdit(bank)}
+                            className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                            title="Editar"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

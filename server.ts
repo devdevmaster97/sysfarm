@@ -131,6 +131,23 @@ async function startServer() {
     }
   });
 
+  app.put("/api/banks/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { nome, numero_agencia, numero_conta, cidade } = req.body;
+      if (!nome) return res.status(400).json({ status: "error", message: "Nome obrigatório" });
+      const result = await pool.query(
+        `UPDATE banco SET nome = $1, numero_agencia = $2, numero_conta = $3, cidade = $4
+         WHERE id_banco = $5 RETURNING *`,
+        [nome, numero_agencia || '', numero_conta || '', cidade || '', id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ status: "error", message: "Banco não encontrado" });
+      res.json({ status: "success", data: result.rows[0] });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
   // Expenses/Transactions routes
   app.post("/api/expenses", async (req: Request, res: Response) => {
     try {
