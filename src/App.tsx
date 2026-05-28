@@ -461,6 +461,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
 function Dashboard() {
   const [summary, setSummary] = useState<{ total_creditos: number; total_debitos: number; saldo_liquido: number; total_lancamentos: number } | null>(null);
   const [recent, setRecent] = useState<any[]>([]);
+  const [recentError, setRecentError] = useState('');
   const [byCategory, setByCategory] = useState<{ categoria: string; total: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -476,15 +477,31 @@ function Dashboard() {
 
   useEffect(() => {
     setLoading(true);
+    setRecentError('');
+
+    const safeJson = async (url: string) => {
+      try {
+        const r = await fetch(`${API_URL}${url}`, { credentials: 'include' });
+        const data = await r.json();
+        return data;
+      } catch {
+        return null;
+      }
+    };
+
     Promise.all([
-      fetch(`${API_URL}/api/dashboard/summary`, { credentials: 'include' }).then(r => r.json()),
-      fetch(`${API_URL}/api/dashboard/recent`,   { credentials: 'include' }).then(r => r.json()),
-      fetch(`${API_URL}/api/dashboard/by-category`, { credentials: 'include' }).then(r => r.json()),
+      safeJson('/api/dashboard/summary'),
+      safeJson('/api/dashboard/recent'),
+      safeJson('/api/dashboard/by-category'),
     ]).then(([s, r, c]) => {
-      setSummary(s);
-      setRecent(Array.isArray(r) ? r : []);
+      if (s && !s.status) setSummary(s);
+      if (Array.isArray(r)) {
+        setRecent(r);
+      } else if (r?.status === 'error') {
+        setRecentError(r.detail || r.message || 'Erro ao buscar atividade recente.');
+      }
       setByCategory(Array.isArray(c) ? c : []);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).finally(() => setLoading(false));
   }, []);
 
   const maxCategoria = byCategory.length > 0 ? Math.max(...byCategory.map(c => c.total)) : 1;
@@ -532,7 +549,12 @@ function Dashboard() {
           <div className="p-6 space-y-3">
             {[1,2,3,4,5].map(i => <div key={i} className="h-14 bg-farm-cream/40 rounded-2xl animate-pulse" />)}
           </div>
-        ) : recent.length === 0 ? (
+          ) : recentError ? (
+          <div className="p-6 text-center">
+            <p className="text-rose-500 text-sm font-bold">Erro ao carregar lançamentos:</p>
+            <p className="text-rose-400 text-xs mt-1 font-mono break-all">{recentError}</p>
+          </div>
+          ) : recent.length === 0 ? (
           <div className="p-12 text-center">
             <Receipt className="mx-auto text-farm-green/20 mb-3" size={40} />
             <p className="text-farm-green/40 text-sm italic">Nenhum lançamento encontrado.</p>
