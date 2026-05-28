@@ -281,9 +281,9 @@ async function startServer() {
 
       const result = await pool.query(`
         SELECT
-          COALESCE(SUM(CASE WHEN natureza = 'C' THEN valor ELSE 0 END), 0) as total_creditos,
-          COALESCE(SUM(CASE WHEN natureza = 'D' THEN valor ELSE 0 END), 0) as total_debitos,
-          COALESCE(SUM(CASE WHEN natureza = 'C' THEN valor ELSE -valor END), 0) as saldo_liquido,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(natureza)) = 'C' THEN valor ELSE 0 END), 0) as total_creditos,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(natureza)) = 'D' THEN valor ELSE 0 END), 0) as total_debitos,
+          COALESCE(SUM(CASE WHEN UPPER(TRIM(natureza)) = 'C' THEN valor ELSE -valor END), 0) as saldo_liquido,
           COUNT(*) as total_lancamentos
         FROM caixa
         WHERE data_lancamento BETWEEN $1 AND $2
@@ -328,7 +328,7 @@ async function startServer() {
           COALESCE(SUM(c.valor), 0) as total
         FROM caixa c
         LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
-        WHERE c.natureza = 'D'
+        WHERE UPPER(TRIM(c.natureza)) = 'D'
           AND c.data_lancamento BETWEEN $1 AND $2
         GROUP BY cat.descricao
         ORDER BY total DESC
@@ -337,7 +337,7 @@ async function startServer() {
 
       res.json(result.rows);
     } catch (err) {
-      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
     }
   });
 
