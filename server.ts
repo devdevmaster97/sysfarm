@@ -401,6 +401,40 @@ async function startServer() {
     }
   });
 
+  // Movimentos por Categoria
+  app.get("/api/reports/movimentos-categoria", async (req: Request, res: Response) => {
+    try {
+      const { dataInicio, dataFim, categoriaId } = req.query;
+      if (!dataInicio || !dataFim) {
+        return res.status(400).json({ status: "error", message: "dataInicio e dataFim são obrigatórios" });
+      }
+      const params: any[] = [dataInicio, dataFim];
+      let catFilter = '';
+      if (categoriaId) {
+        catFilter = ' AND c.id_categoria_caixa = $3';
+        params.push(categoriaId);
+      }
+      const result = await pool.query(`
+        SELECT
+          COALESCE(cat.descricao, 'Sem categoria') AS categoria,
+          cat.id_categoria_caixa,
+          c.data_lancamento,
+          UPPER(TRIM(c.natureza)) AS natureza,
+          c.historico,
+          c.valor,
+          c.id_banco
+        FROM caixa c
+        LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+        WHERE c.data_lancamento BETWEEN $1 AND $2${catFilter}
+        ORDER BY cat.descricao ASC, c.data_lancamento ASC, c.id_caixa ASC
+      `, params);
+
+      res.json({ rows: result.rows, dataInicio, dataFim });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

@@ -461,7 +461,7 @@ export default function App() {
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
             )}
             {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
-            {activeTab === 'reports' && <ReportsHub />}
+            {activeTab === 'reports' && <ReportsHub categories={categories} />}
           </AnimatePresence>
         </div>
       </main>
@@ -1224,25 +1224,26 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
 
 type BankRow = { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string };
 
-function ReportsHub() {
-  const [selected, setSelected] = useState<'fechamento' | 'movimentos'>('fechamento');
+function ReportsHub({ categories }: { categories: Category[] }) {
+  const [selected, setSelected] = useState<'fechamento' | 'movimentos' | 'categorias'>('fechamento');
+  const tabs = [
+    { id: 'fechamento',  label: 'Fechamento do Caixa' },
+    { id: 'movimentos',  label: 'Movimentos por Data' },
+    { id: 'categorias',  label: 'Movimentos por Categoria' },
+  ] as const;
   return (
     <div className="space-y-6">
-      <div className="flex gap-3">
-        <button
-          onClick={() => setSelected('fechamento')}
-          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === 'fechamento' ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}
-        >
-          Fechamento do Caixa
-        </button>
-        <button
-          onClick={() => setSelected('movimentos')}
-          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === 'movimentos' ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}
-        >
-          Movimentos por Data
-        </button>
+      <div className="flex flex-wrap gap-3">
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setSelected(t.id)}
+            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === t.id ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
-      {selected === 'fechamento' ? <FechamentoCaixa /> : <MovimentosPeriodo />}
+      {selected === 'fechamento' && <FechamentoCaixa />}
+      {selected === 'movimentos' && <MovimentosPeriodo />}
+      {selected === 'categorias' && <MovimentosPorCategoria categories={categories} />}
     </div>
   );
 }
@@ -1655,6 +1656,228 @@ function MovimentosPeriodo() {
             </div>
           </div>
         </>
+      )}
+    </motion.div>
+  );
+}
+
+function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
+  const now = new Date();
+  const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const today = now.toISOString().split('T')[0];
+
+  const [dataInicio, setDataInicio] = useState(firstDay);
+  const [dataFim, setDataFim] = useState(today);
+  const [categoriaId, setCategoriaId] = useState('');
+  const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
+
+  const buscar = async () => {
+    setLoading(true); setError('');
+    try {
+      const params = new URLSearchParams({ dataInicio, dataFim });
+      if (categoriaId) params.set('categoriaId', categoriaId);
+      const res = await fetch(`${API_URL}/api/reports/movimentos-categoria?${params}`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.status === 'error') setError(json.detail || json.message);
+      else setData(json);
+    } catch { setError('Erro de conexão.'); }
+    finally { setLoading(false); }
+  };
+
+  // Agrupa as linhas por categoria
+  const grupos = React.useMemo(() => {
+    if (!data) return [];
+    const map = new Map<string, any[]>();
+    for (const row of data.rows) {
+      const key = row.categoria || 'Sem categoria';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(row);
+    }
+    return Array.from(map.entries()).map(([cat, rows]) => {
+      const total = rows.reduce((acc, r) => {
+        const v = parseFloat(r.valor);
+        return acc + (r.natureza === 'C' ? v : -v);
+      }, 0);
+      return { cat, rows, total };
+    });
+  }, [data]);
+
+  const imprimir = () => {
+    if (!data || grupos.length === 0) return;
+    let totalAcum = 0;
+    const secoes = grupos.map(g => {
+      totalAcum += g.rows.length;
+      const linhas = g.rows.map(r => {
+        const v = parseFloat(r.valor);
+        const nat = r.natureza;
+        const cor = nat === 'C' ? '#16a34a' : '#dc2626';
+        return `<tr style="border-bottom:1px solid #f0f0f0">
+          <td style="padding:4px 6px;font-weight:900;color:${cor};width:20px">${nat}</td>
+          <td style="padding:4px 6px;font-size:11px;color:#555;white-space:nowrap">${fmtBR(r.data_lancamento)}</td>
+          <td style="padding:4px 6px;font-size:12px">${r.historico || ''}</td>
+          <td style="padding:4px 6px;font-size:11px;text-align:center;color:#666">${r.id_banco || ''}</td>
+          <td style="padding:4px 6px;text-align:right;font-weight:700;color:${cor};white-space:nowrap">${fmt(v)}</td>
+        </tr>`;
+      }).join('');
+      const totCor = g.total >= 0 ? '#16a34a' : '#dc2626';
+      const totLabel = g.total >= 0 ? 'C' : 'D';
+      const totSign = g.total >= 0 ? '' : '-';
+      return `
+        <div style="margin-bottom:24px;page-break-inside:avoid">
+          <h3 style="font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:8px">${g.cat}</h3>
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#f5f5f0;border-bottom:1px solid #ccc">
+              <th style="padding:5px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left;width:20px">D/C</th>
+              <th style="padding:5px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left">Data</th>
+              <th style="padding:5px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left">Histórico</th>
+              <th style="padding:5px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:center">Banco</th>
+              <th style="padding:5px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:right">Valor</th>
+            </tr></thead>
+            <tbody>${linhas}</tbody>
+          </table>
+          <p style="text-align:right;font-weight:900;font-size:13px;margin-top:6px;color:${totCor}">${totSign}R$${fmt(g.total)} ${totLabel}</p>
+          <p style="font-size:11px;color:#999;margin-top:2px">${totalAcum} Lançamentos acumulados</p>
+        </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>Movimentos por Categoria — ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)}</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
+        h2{font-size:18px;font-weight:900;margin-bottom:2px}
+        .sub{color:#666;font-size:11px;margin-bottom:20px}
+        @page{margin:1.5cm;size:A4}
+      </style>
+    </head><body>
+      <h2>MOVIMENTOS POR CATEGORIA</h2>
+      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${data.rows.length} lançamentos &nbsp;·&nbsp; ${grupos.length} categorias</p>
+      ${secoes}
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html); win.document.close(); win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Filtros */}
+      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
+          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Categoria</label>
+          <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px]">
+            <option value="">Todas as categorias</option>
+            {categories.map(c => (
+              <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
+            ))}
+          </select>
+        </div>
+        <button onClick={buscar} disabled={loading}
+          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+          <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
+        </button>
+        {data && (
+          <button onClick={imprimir}
+            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2">
+            <Printer size={18} />Imprimir
+          </button>
+        )}
+      </div>
+
+      {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
+
+      {data && grupos.length === 0 && (
+        <div className="bg-white rounded-3xl p-12 text-center text-farm-green/40 italic">Nenhum lançamento encontrado no período.</div>
+      )}
+
+      {/* Grupos por categoria */}
+      {grupos.map((g, gi) => (
+        <div key={gi} className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
+          <div className={`px-6 py-4 border-b-2 ${g.total >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold uppercase tracking-wide">{g.cat}</h3>
+              <div className="text-right">
+                <span className={`text-lg font-black ${g.total >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  {g.total < 0 ? '-' : ''}R$ {fmt(g.total)}&nbsp;
+                  <span className="text-sm">{g.total >= 0 ? 'C' : 'D'}</span>
+                </span>
+                <p className="text-xs text-farm-green/40">{g.rows.length} lançamento{g.rows.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left min-w-[600px]">
+              <thead className="bg-farm-cream/30 border-b border-farm-green/10">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+                  <th className="px-4 py-2.5 w-8">D/C</th>
+                  <th className="px-4 py-2.5">Data</th>
+                  <th className="px-4 py-2.5">Histórico</th>
+                  <th className="px-4 py-2.5 text-center">Banco</th>
+                  <th className="px-4 py-2.5 text-right">Valor</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-farm-green/5">
+                {g.rows.map((row, ri) => {
+                  const v = parseFloat(row.valor);
+                  const cor = row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600';
+                  return (
+                    <tr key={ri} className="hover:bg-farm-cream/20 transition-colors text-sm">
+                      <td className={`px-4 py-2 font-black text-xs ${cor}`}>{row.natureza}</td>
+                      <td className="px-4 py-2 text-farm-green/60 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                      <td className="px-4 py-2 font-medium uppercase">{row.historico}</td>
+                      <td className="px-4 py-2 text-center text-farm-green/50 text-xs">{row.id_banco || '—'}</td>
+                      <td className={`px-4 py-2 text-right font-bold whitespace-nowrap ${cor}`}>{fmt(v)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+
+      {data && grupos.length > 0 && (
+        <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex gap-8 flex-wrap">
+          <div>
+            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total lançamentos</p>
+            <p className="text-2xl font-black">{data.rows.length}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Categorias</p>
+            <p className="text-2xl font-black">{grupos.length}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total C (recebimentos)</p>
+            <p className="text-2xl font-black text-emerald-600">
+              R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza === 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total D (pagamentos)</p>
+            <p className="text-2xl font-black text-rose-600">
+              R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza !== 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
+            </p>
+          </div>
+        </div>
       )}
     </motion.div>
   );
