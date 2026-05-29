@@ -461,7 +461,7 @@ export default function App() {
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
             )}
             {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
-            {activeTab === 'reports' && <FechamentoCaixa />}
+            {activeTab === 'reports' && <ReportsHub />}
           </AnimatePresence>
         </div>
       </main>
@@ -1224,6 +1224,29 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
 
 type BankRow = { id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string };
 
+function ReportsHub() {
+  const [selected, setSelected] = useState<'fechamento' | 'movimentos'>('fechamento');
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-3">
+        <button
+          onClick={() => setSelected('fechamento')}
+          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === 'fechamento' ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}
+        >
+          Fechamento do Caixa
+        </button>
+        <button
+          onClick={() => setSelected('movimentos')}
+          className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === 'movimentos' ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}
+        >
+          Movimentos por Data
+        </button>
+      </div>
+      {selected === 'fechamento' ? <FechamentoCaixa /> : <MovimentosPeriodo />}
+    </div>
+  );
+}
+
 function FechamentoCaixa() {
   const today = new Date().toISOString().split('T')[0];
   const [dataFim, setDataFim] = useState(today);
@@ -1427,6 +1450,211 @@ function FechamentoCaixa() {
             </table>
           </div>
         </div>
+      )}
+    </motion.div>
+  );
+}
+
+function MovimentosPeriodo() {
+  const now = new Date();
+  const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const today = now.toISOString().split('T')[0];
+
+  const [dataInicio, setDataInicio] = useState(firstDay);
+  const [dataFim, setDataFim] = useState(today);
+  const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
+
+  const buscar = async () => {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/reports/movimentos-periodo?dataInicio=${dataInicio}&dataFim=${dataFim}`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.status === 'error') setError(json.detail || json.message);
+      else setData(json);
+    } catch { setError('Erro de conexão.'); }
+    finally { setLoading(false); }
+  };
+
+  const imprimir = () => {
+    if (!data) return;
+    let saldo = 0;
+    let totalC = 0, totalD = 0;
+
+    const linhas = data.rows.map(row => {
+      const val = parseFloat(row.valor);
+      const nat = row.natureza;
+      if (nat === 'C') { saldo += val; totalC += val; }
+      else { saldo -= val; totalD += val; }
+      const saldoCor = saldo >= 0 ? '#16a34a' : '#dc2626';
+      const saldoLabel = saldo >= 0 ? 'C' : 'D';
+      const natCor = nat === 'C' ? '#16a34a' : '#dc2626';
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:4px 6px;font-weight:900;color:${natCor};width:20px">${nat}</td>
+        <td style="padding:4px 6px;font-size:12px;max-width:200px;overflow:hidden">${row.historico || ''}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700;color:${natCor};white-space:nowrap">${fmt(val)}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666">${row.categoria}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666;text-align:center">${row.id_banco || ''}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700;color:${saldoCor};white-space:nowrap">${saldoLabel} ${fmt(saldo)}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666;white-space:nowrap">${fmtBR(row.data_lancamento)}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>Movimentos por Data — ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)}</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
+        h2{font-size:18px;font-weight:900;margin-bottom:2px}
+        .sub{color:#666;font-size:11px;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse}
+        thead tr{background:#f5f5f0;border-bottom:2px solid #ccc}
+        thead th{padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left}
+        .total-row td{padding:8px 6px;font-weight:900;font-size:13px;border-top:2px solid #333;background:#f5f5f0}
+        @page{margin:1.5cm;size:A4 landscape}
+      </style>
+    </head><body>
+      <h2>MOVIMENTOS POR DATA</h2>
+      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${data.rows.length} lançamentos</p>
+      <table>
+        <thead><tr>
+          <th style="width:20px">D/C</th>
+          <th>Histórico</th>
+          <th style="text-align:right">Valor</th>
+          <th>Categoria</th>
+          <th style="text-align:center">Banco</th>
+          <th style="text-align:right">Saldo Acum.</th>
+          <th>Data</th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="2">TOTAIS</td>
+            <td></td>
+            <td style="color:#16a34a">Recebimentos: ${fmt(totalC)}</td>
+            <td style="color:#dc2626">Pagamentos: ${fmt(totalD)}</td>
+            <td style="text-align:right;color:${totalC - totalD >= 0 ? '#16a34a' : '#dc2626'}">
+              ${totalC - totalD >= 0 ? 'C' : 'D'} ${fmt(totalC - totalD)}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html); win.document.close(); win.focus();
+    setTimeout(() => win.print(), 400);
+  };
+
+  // Calcula saldo acumulado para a tela
+  let saldoAcum = 0;
+  let totalC = 0, totalD = 0;
+  const rows = (data?.rows ?? []).map(row => {
+    const val = parseFloat(row.valor);
+    if (row.natureza === 'C') { saldoAcum += val; totalC += val; }
+    else { saldoAcum -= val; totalD += val; }
+    return { ...row, saldoAcum, val };
+  });
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      {/* Filtro */}
+      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
+          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+        </div>
+        <button onClick={buscar} disabled={loading}
+          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+          <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
+        </button>
+        {data && (
+          <button onClick={imprimir}
+            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2">
+            <Printer size={18} />Imprimir
+          </button>
+        )}
+      </div>
+
+      {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
+
+      {data && (
+        <>
+          {/* Totalizadores */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Total Recebimentos</p>
+              <p className="text-xl font-black text-emerald-600">R$ {totalC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Total Pagamentos</p>
+              <p className="text-xl font-black text-rose-600">R$ {totalD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Saldo do Período</p>
+              <p className={`text-xl font-black ${(totalC - totalD) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                R$ {(totalC - totalD).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+
+          {/* Tabela */}
+          <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
+            <div className="px-6 py-4 border-b border-farm-green/10 flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold">Movimentos — {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}</h3>
+              <span className="text-xs text-farm-green/40 font-medium">{rows.length} lançamentos</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[800px]">
+                <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+                  <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+                    <th className="px-4 py-3 w-8">D/C</th>
+                    <th className="px-4 py-3">Histórico</th>
+                    <th className="px-4 py-3 text-right">Valor</th>
+                    <th className="px-4 py-3">Categoria</th>
+                    <th className="px-4 py-3 text-center">Banco</th>
+                    <th className="px-4 py-3 text-right">Saldo Acum.</th>
+                    <th className="px-4 py-3 w-8 text-center">D/C</th>
+                    <th className="px-4 py-3">Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-farm-green/5">
+                  {rows.map((row, i) => (
+                    <tr key={i} className="hover:bg-farm-cream/20 transition-colors text-sm">
+                      <td className={`px-4 py-2.5 font-black text-xs ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
+                      <td className="px-4 py-2.5 font-medium uppercase max-w-xs truncate">{row.historico}</td>
+                      <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {fmt(row.val)}
+                      </td>
+                      <td className="px-4 py-2.5 text-farm-green/60 text-xs">{row.categoria}</td>
+                      <td className="px-4 py-2.5 text-center text-farm-green/50 text-xs">{row.id_banco || '—'}</td>
+                      <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.saldoAcum >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {fmt(row.saldoAcum)}
+                      </td>
+                      <td className={`px-4 py-2.5 text-center font-black text-xs ${row.saldoAcum >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {row.saldoAcum >= 0 ? 'C' : 'D'}
+                      </td>
+                      <td className="px-4 py-2.5 text-farm-green/60 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </motion.div>
   );
