@@ -975,7 +975,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
   const [formData, setFormData] = useState({
     data_lancamento: new Date().toISOString().split('T')[0],
     historico: '',
-    valor: '',
+    valorRaw: '',      // dígitos puros em centavos: "14326" = R$ 143,26
     natureza: 'D' as 'D' | 'C',
     id_categoria_caixa: '',
     id_banco: ''
@@ -983,12 +983,28 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Converte centavos (string de dígitos) para exibição: "14326" → "143,26"
+  const displayValor = (raw: string): string => {
+    const digits = raw.replace(/\D/g, '') || '0';
+    const num = parseInt(digits, 10);
+    return (num / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Captura teclas, mantém apenas dígitos
+  const handleValorInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '');
+    // Remove zeros à esquerda desnecessários
+    const trimmed = raw.replace(/^0+/, '') || '0';
+    setFormData(f => ({ ...f, valorRaw: trimmed === '0' ? '' : trimmed }));
+  };
+
   useEffect(() => {
     if (expense) {
+      const raw = String(Math.round(parseFloat(String(expense.valor)) * 100));
       setFormData({
         data_lancamento: String(expense.data_lancamento).split('T')[0],
         historico: expense.historico,
-        valor: String(expense.valor),
+        valorRaw: raw,
         natureza: expense.natureza,
         id_categoria_caixa: String(expense.id_categoria_caixa),
         id_banco: (expense as any).id_banco ? String((expense as any).id_banco) : ''
@@ -997,7 +1013,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
       setFormData({
         data_lancamento: new Date().toISOString().split('T')[0],
         historico: '',
-        valor: '',
+        valorRaw: '',
         natureza: 'D',
         id_categoria_caixa: '',
         id_banco: ''
@@ -1007,6 +1023,10 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.valorRaw || parseInt(formData.valorRaw, 10) === 0) {
+      setError('Informe um valor maior que zero.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -1021,10 +1041,12 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          ...formData,
-          valor: parseFloat(formData.valor),
+          data_lancamento: formData.data_lancamento,
+          historico: formData.historico,
+          natureza: formData.natureza,
           id_categoria_caixa: parseInt(formData.id_categoria_caixa),
-          id_banco: formData.id_banco ? parseInt(formData.id_banco) : null
+          id_banco: formData.id_banco ? parseInt(formData.id_banco) : null,
+          valor: parseInt(formData.valorRaw || '0', 10) / 100
         })
       });
 
@@ -1151,13 +1173,13 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
                   Valor (R$)
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   required
-                  step="0.01"
                   placeholder="0,00"
-                  value={formData.valor}
-                  onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-bold text-lg"
+                  value={formData.valorRaw ? displayValor(formData.valorRaw) : ''}
+                  onChange={handleValorInput}
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-bold text-lg text-right"
                 />
               </div>
 
