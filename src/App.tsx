@@ -55,6 +55,46 @@ interface Expense {
 
 const PWA_DISMISSED_KEY = 'sysfarm_pwa_dismissed';
 
+// ── Toast ──────────────────────────────────────────────────────────────────
+type ToastType = 'success' | 'error';
+interface ToastMsg { id: number; message: string; type: ToastType; }
+
+function useToast() {
+  const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const show = (message: string, type: ToastType = 'success') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, message, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000);
+  };
+  return { toasts, show };
+}
+
+function ToastContainer({ toasts }: { toasts: ToastMsg[] }) {
+  return (
+    <div className="fixed top-5 right-5 z-[200] flex flex-col gap-3 pointer-events-none">
+      <AnimatePresence>
+        {toasts.map(t => (
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, x: 80, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 80, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-sm font-bold pointer-events-auto min-w-[220px] ${
+              t.type === 'success'
+                ? 'bg-farm-green text-farm-cream'
+                : 'bg-rose-500 text-white'
+            }`}
+          >
+            <span className="text-lg">{t.type === 'success' ? '✓' : '✕'}</span>
+            {t.message}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [show, setShow] = useState(false);
@@ -176,6 +216,7 @@ export default function App() {
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
+  const { toasts, show: showToast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -473,13 +514,15 @@ export default function App() {
         categories={categories}
         banks={banks}
         expense={editingExpense}
-        onSave={() => {
+        onSave={(wasEditing) => {
           setExpenseModalOpen(false);
           setEditingExpense(null);
-          fetchTransactions(editingExpense ? currentPage : 1);
-          if (!editingExpense) setCurrentPage(1);
+          fetchTransactions(wasEditing ? currentPage : 1);
+          if (!wasEditing) setCurrentPage(1);
+          showToast(wasEditing ? 'Lançamento atualizado!' : 'Lançamento salvo!');
         }}
       />
+      <ToastContainer toasts={toasts} />
       {/* Delete Confirmation Modal */}
       <ConfirmDeleteModal
         isOpen={deletingExpenseId !== null}
@@ -967,7 +1010,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
   onClose: () => void; 
   categories: Category[];
   banks: { id_banco: number; nome: string }[];
-  onSave: () => void;
+  onSave: (wasEditing: boolean) => void;
   expense?: Expense | null;
 }) {
   const isEditing = !!expense;
@@ -1051,7 +1094,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
       });
 
       if (res.ok) {
-        onSave();
+        onSave(isEditing);
       } else {
         setError('Erro ao salvar lançamento.');
       }
