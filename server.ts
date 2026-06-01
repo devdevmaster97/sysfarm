@@ -153,13 +153,13 @@ async function startServer() {
   // Expenses/Transactions routes
   app.post("/api/expenses", async (req: Request, res: Response) => {
     try {
-      const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco } = req.body;
+      const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario } = req.body;
       
       const result = await pool.query(
-        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
+        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) 
          RETURNING *`,
-        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null]
+        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null, id_usuario || null]
       );
 
       res.json({ success: true, expense: result.rows[0] });
@@ -192,9 +192,11 @@ async function startServer() {
       const total = parseInt(countResult.rows[0].total, 10);
 
       const dataResult = await pool.query(
-        `SELECT c.*, cat.descricao as categoria_nome
+        `SELECT c.*, cat.descricao as categoria_nome,
+                u.nome as usuario_nome
          FROM caixa c
          LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+         LEFT JOIN usuarios u ON c.id_usuario = u.id_usuario
          ${whereClause}
          ORDER BY c.data_lancamento DESC, c.id_caixa DESC
          LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
@@ -215,16 +217,16 @@ async function startServer() {
 
   app.post("/api/transactions", async (req: Request, res: Response) => {
     try {
-      const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco } = req.body;
+      const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario } = req.body;
       
       if (!data_lancamento || !historico || !valor || !natureza || !id_categoria_caixa) {
         return res.status(400).json({ status: "error", message: "Campos obrigatórios faltando" });
       }
 
       const result = await pool.query(
-        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco) 
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null]
+        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null, id_usuario || null]
       );
 
       res.status(201).json({ status: "success", data: result.rows[0] });

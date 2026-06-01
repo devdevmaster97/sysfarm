@@ -513,6 +513,7 @@ export default function App() {
         onClose={() => { setExpenseModalOpen(false); setEditingExpense(null); }}
         categories={categories}
         banks={banks}
+        currentUserId={user.id_usuario}
         expense={editingExpense}
         onSave={(wasEditing) => {
           setExpenseModalOpen(false);
@@ -898,6 +899,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
                 <th className="px-6 py-4">Histórico</th>
                 <th className="px-6 py-4">Categoria</th>
                 <th className="px-6 py-4 text-right">Valor</th>
+                <th className="px-4 py-4">Usuário</th>
                 <th className="px-4 py-4 text-center">Ações</th>
               </tr>
             </thead>
@@ -913,6 +915,9 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
                   </td>
                   <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
                     {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
+                  </td>
+                  <td className="px-4 py-4 text-xs text-farm-green/50 whitespace-nowrap">
+                    {(expense as any).usuario_nome || '—'}
                   </td>
                   <td className="px-4 py-4">
                     {!isReadonly && (
@@ -1005,11 +1010,12 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
   );
 }
 
-function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: { 
+function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSave, expense }: { 
   isOpen: boolean; 
   onClose: () => void; 
   categories: Category[];
   banks: { id_banco: number; nome: string }[];
+  currentUserId: number;
   onSave: (wasEditing: boolean) => void;
   expense?: Expense | null;
 }) {
@@ -1089,6 +1095,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, onSave, expense }: {
           natureza: formData.natureza,
           id_categoria_caixa: parseInt(formData.id_categoria_caixa),
           id_banco: formData.id_banco ? parseInt(formData.id_banco) : null,
+          id_usuario: currentUserId,
           valor: parseInt(formData.valorRaw || '0', 10) / 100
         })
       });
