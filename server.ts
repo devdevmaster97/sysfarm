@@ -153,13 +153,13 @@ async function startServer() {
   // Expenses/Transactions routes
   app.post("/api/expenses", async (req: Request, res: Response) => {
     try {
-      const { data_lancamento, historico, valor, natureza, id_categoria_caixa } = req.body;
+      const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco } = req.body;
       
       const result = await pool.query(
-        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa) 
-         VALUES ($1, $2, $3, $4, $5) 
+        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco) 
+         VALUES ($1, $2, $3, $4, $5, $6) 
          RETURNING *`,
-        [data_lancamento, historico, valor, natureza, id_categoria_caixa]
+        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null]
       );
 
       res.json({ success: true, expense: result.rows[0] });
