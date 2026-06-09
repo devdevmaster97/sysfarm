@@ -154,12 +154,22 @@ async function startServer() {
   app.post("/api/expenses", async (req: Request, res: Response) => {
     try {
       const { data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario } = req.body;
-      
+
+      const colCheck = await pool.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='caixa' AND column_name='id_usuario'
+      `);
+      const hasUsuario = colCheck.rowCount > 0;
+
       const result = await pool.query(
-        `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-         RETURNING *`,
-        [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null, id_usuario || null]
+        hasUsuario
+          ? `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco, id_usuario)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`
+          : `INSERT INTO caixa (data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        hasUsuario
+          ? [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null, id_usuario || null]
+          : [data_lancamento, historico, valor, natureza, id_categoria_caixa, id_banco || null]
       );
 
       res.json({ success: true, expense: result.rows[0] });
@@ -191,12 +201,19 @@ async function startServer() {
       );
       const total = parseInt(countResult.rows[0].total, 10);
 
+      // Verifica se a coluna id_usuario existe na tabela caixa
+      const colCheck = await pool.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='caixa' AND column_name='id_usuario'
+      `);
+      const hasUsuario = colCheck.rowCount > 0;
+
       const dataResult = await pool.query(
-        `SELECT c.*, cat.descricao as categoria_nome,
-                u.nome as usuario_nome
+        `SELECT c.*, cat.descricao as categoria_nome
+                ${hasUsuario ? ', u.nome as usuario_nome' : ", '' as usuario_nome"}
          FROM caixa c
          LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
-         LEFT JOIN usuarios u ON c.id_usuario = u.id_usuario
+         ${hasUsuario ? 'LEFT JOIN usuarios u ON c.id_usuario = u.id_usuario' : ''}
          ${whereClause}
          ORDER BY c.data_lancamento DESC, c.id_caixa DESC
          LIMIT $${paramCount} OFFSET $${paramCount + 1}`,
