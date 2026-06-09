@@ -450,7 +450,7 @@ export default function App() {
   );
 
   return (
-    <div className={`min-h-screen flex bg-farm-cream dark:bg-[#0f0f09] text-farm-brown dark:text-[#e5e5d0] overflow-x-hidden${isDark ? ' dark' : ''}`}>
+    <div className={`min-h-screen flex bg-farm-cream dark:bg-[#0f0f09] text-farm-brown dark:text-[#e5e5d0] dark:text-[#e5e5d0] overflow-x-hidden${isDark ? ' dark' : ''}`}>
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -633,7 +633,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
           )}
 
           <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-farm-green/40 ml-1">E-mail de Acesso</label>
+            <label className="text-xs font-black uppercase tracking-widest text-farm-green/40 dark:text-[#e5e5d0]/50 ml-1">E-mail de Acesso</label>
             <div className="relative">
               <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-farm-green/30" />
               <input 
@@ -648,7 +648,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-widest text-farm-green/40 ml-1">Senha</label>
+            <label className="text-xs font-black uppercase tracking-widest text-farm-green/40 dark:text-[#e5e5d0]/50 ml-1">Senha</label>
             <div className="relative">
               <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-farm-green/30" />
               <input 
@@ -661,7 +661,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
               <button
                 type="button"
                 onClick={() => setShowPassword(v => !v)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-farm-green/30 hover:text-farm-green transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-farm-green/30 dark:text-[#e5e5d0]/40 hover:text-farm-green transition-colors"
                 tabIndex={-1}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -677,7 +677,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
             {loading ? 'Validando...' : 'Acessar Sistema'}
           </button>
 
-          <p className="text-center text-[10px] text-farm-green/30 uppercase tracking-[0.2em] font-black mt-8">
+          <p className="text-center text-[10px] text-farm-green/30 dark:text-[#e5e5d0]/40 uppercase tracking-[0.2em] font-black mt-8">
             Versão 2.1.0 • PWA Ativado
           </p>
         </form>
@@ -771,7 +771,7 @@ function Dashboard() {
         <div className="p-6 border-b border-farm-green/10 flex items-center gap-2">
           <Calendar size={20} className="text-farm-green" />
           <h3 className="text-xl font-serif font-bold">Atividade Recente</h3>
-          <span className="ml-auto text-xs text-farm-green/40 font-medium">Últimos 10 lançamentos</span>
+          <span className="ml-auto text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">Últimos 10 lançamentos</span>
         </div>
         {loading ? (
           <div className="p-6 space-y-3">
@@ -784,7 +784,7 @@ function Dashboard() {
           </div>
           ) : recent.length === 0 ? (
           <div className="p-12 text-center">
-            <Receipt className="mx-auto text-farm-green/20 mb-3" size={40} />
+            <Receipt className="mx-auto text-farm-green/20 dark:text-[#e5e5d0]/30 mb-3" size={40} />
             <p className="text-farm-green/40 text-sm italic">Nenhum lançamento encontrado.</p>
           </div>
         ) : (
@@ -801,7 +801,7 @@ function Dashboard() {
               <tbody className="divide-y divide-farm-green/5">
                 {recent.map((item, i) => (
                   <tr key={i} className="hover:bg-farm-cream/20 transition-colors">
-                    <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70">{formatDate(item.data_lancamento)}</td>
+                    <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70 dark:text-[#e5e5d0]/70">{formatDate(item.data_lancamento)}</td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
                         <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50' : 'bg-emerald-50'}`}>
@@ -832,7 +832,7 @@ function Dashboard() {
       {/* By Category */}
       <div className="bg-white dark:bg-[#1a1a11] p-6 rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5">
         <h3 className="text-xl font-serif font-bold mb-1">Despesas por Categoria</h3>
-        <p className="text-xs text-farm-green/40 mb-5 italic capitalize">{monthName}</p>
+        <p className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 mb-5 italic capitalize">{monthName}</p>
         {loading ? (
           <div className="space-y-3">
             {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-farm-cream/40 rounded-xl animate-pulse" />)}
@@ -844,7 +844,7 @@ function Dashboard() {
             {byCategory.map((c, i) => (
               <div key={i}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-bold uppercase tracking-tight text-farm-brown truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
+                  <span className="text-xs font-bold uppercase tracking-tight text-farm-brown dark:text-[#e5e5d0] truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
                   <span className="text-xs font-black text-rose-600 flex-shrink-0">{fmt(c.total)}</span>
                 </div>
                 <div className="h-2 bg-farm-cream rounded-full overflow-hidden">
@@ -869,13 +869,13 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
         <div className="p-3 bg-farm-cream rounded-2xl">
           <Icon className={color} size={24} />
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-farm-green/40">Geral</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-farm-green/40 dark:text-[#e5e5d0]/50">Geral</span>
       </div>
       <div>
-        <h4 className="text-sm font-medium text-farm-green/60 uppercase tracking-wide">{title}</h4>
+        <h4 className="text-sm font-medium text-farm-green/60 dark:text-[#e5e5d0]/70 uppercase tracking-wide">{title}</h4>
         <p className="text-3xl font-serif font-black mt-1">{value}</p>
       </div>
-      <p className="text-xs font-semibold text-farm-green/40 italic">{trend}</p>
+      <p className="text-xs font-semibold text-farm-green/40 dark:text-[#e5e5d0]/50 italic">{trend}</p>
     </div>
   );
 }
@@ -971,7 +971,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
     >
       {expenses.length === 0 ? (
         <div className="p-12 text-center">
-          <Receipt className="mx-auto text-farm-green/20 mb-4" size={48} />
+          <Receipt className="mx-auto text-farm-green/20 dark:text-[#e5e5d0]/30 mb-4" size={48} />
           <p className="text-farm-green/40 font-medium italic">Nenhum lançamento cadastrado ainda.</p>
           <p className="text-farm-green/30 text-sm mt-2">Clique no botão "Lançamento" para adicionar.</p>
         </div>
@@ -979,7 +979,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[700px]">
             <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
-              <tr className="text-xs uppercase tracking-widest text-farm-green/60">
+              <tr className="text-xs uppercase tracking-widest text-farm-green/60 dark:text-[#e5e5d0]/70">
                 <th className="px-3 py-4 w-8"></th>
                 <th className="px-4 py-4">Data</th>
                 <th className="px-4 py-4">Histórico</th>
@@ -1000,7 +1000,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                       <td className="px-3 py-4">
                         <button
                           onClick={() => toggleRow(expense.id_caixa)}
-                          className="p-1 text-farm-green/40 hover:text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                          className="p-1 text-farm-green/40 dark:text-[#e5e5d0]/50 hover:text-farm-green hover:bg-farm-cream rounded-lg transition-all"
                           title={isExpanded ? 'Recolher' : 'Expandir'}
                         >
                           <motion.div
@@ -1021,7 +1021,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                       <td className={`px-4 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
                         {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
                       </td>
-                      <td className="px-4 py-4 text-xs text-farm-green/50 whitespace-nowrap">
+                      <td className="px-4 py-4 text-xs text-farm-green/50 dark:text-[#e5e5d0]/60 whitespace-nowrap">
                         {(expense as any).usuario_nome || '—'}
                       </td>
                       <td className="px-4 py-4">
@@ -1059,14 +1059,14 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                               <div className="px-8 py-3 bg-farm-cream/20 flex flex-wrap gap-6 items-center">
                                 <div className="flex items-center gap-2">
                                   <Tags size={13} className="text-farm-green/40" />
-                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40">Categoria:</span>
+                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40 dark:text-[#e5e5d0]/50">Categoria:</span>
                                   <span className="text-xs font-bold uppercase text-farm-brown">
                                     {getCategoryName(expense.id_categoria_caixa)}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <Receipt size={13} className="text-farm-green/40" />
-                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40">Tipo:</span>
+                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40 dark:text-[#e5e5d0]/50">Tipo:</span>
                                   <span className={`text-xs font-black uppercase ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
                                     {expense.natureza === 'D' ? 'Débito' : 'Crédito'}
                                   </span>
@@ -1088,7 +1088,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-6 py-4 border-t border-farm-green/10 bg-farm-cream/30">
-          <span className="text-xs text-farm-green/50 font-medium">
+          <span className="text-xs text-farm-green/50 dark:text-[#e5e5d0]/60 font-medium">
             {totalRecords.toLocaleString('pt-BR')} registros · Página {currentPage} de {totalPages}
           </span>
           <div className="flex items-center gap-1">
@@ -1297,7 +1297,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                <label className="block text-sm font-bold text-farm-green/80 dark:text-[#e5e5d0]/80 mb-2 uppercase tracking-wide">
                   Data
                 </label>
                 <input
@@ -1310,7 +1310,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                <label className="block text-sm font-bold text-farm-green/80 dark:text-[#e5e5d0]/80 mb-2 uppercase tracking-wide">
                   Tipo
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1358,7 +1358,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                <label className="block text-sm font-bold text-farm-green/80 dark:text-[#e5e5d0]/80 mb-2 uppercase tracking-wide">
                   Valor (R$)
                 </label>
                 <input
@@ -1373,7 +1373,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-farm-green/80 mb-2 uppercase tracking-wide">
+                <label className="block text-sm font-bold text-farm-green/80 dark:text-[#e5e5d0]/80 mb-2 uppercase tracking-wide">
                   Categoria
                 </label>
                 <select
@@ -1566,7 +1566,7 @@ function FechamentoCaixa() {
       {/* Filtro */}
       <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
             Saldo acumulado até a data
           </label>
           <input
@@ -1616,7 +1616,7 @@ function FechamentoCaixa() {
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
               <thead className="bg-farm-cream/50 border-b-2 border-farm-green/10 print:bg-gray-100">
-                <tr className="text-xs uppercase tracking-widest text-farm-green/60 print:text-gray-600">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/60 dark:text-[#e5e5d0]/70 print:text-gray-600">
                   <th className="px-6 py-3 w-8"></th>
                   <th className="px-2 py-3 w-10">#</th>
                   <th className="px-2 py-3">Banco</th>
@@ -1780,12 +1780,12 @@ function MovimentosPeriodo() {
       {/* Filtro */}
       <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
             className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
             className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
@@ -1808,15 +1808,15 @@ function MovimentosPeriodo() {
           {/* Totalizadores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Total Recebimentos</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total Recebimentos</p>
               <p className="text-xl font-black text-emerald-600">R$ {totalC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Total Pagamentos</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total Pagamentos</p>
               <p className="text-xl font-black text-rose-600">R$ {totalD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 mb-1">Saldo do Período</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Saldo do Período</p>
               <p className={`text-xl font-black ${(totalC - totalD) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 R$ {(totalC - totalD).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
@@ -1827,7 +1827,7 @@ function MovimentosPeriodo() {
           <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
             <div className="px-6 py-4 border-b border-farm-green/10 flex items-center justify-between">
               <h3 className="font-serif text-lg font-bold">Movimentos — {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}</h3>
-              <span className="text-xs text-farm-green/40 font-medium">{rows.length} lançamentos</span>
+              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">{rows.length} lançamentos</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[800px]">
@@ -1851,15 +1851,15 @@ function MovimentosPeriodo() {
                       <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {fmt(row.val)}
                       </td>
-                      <td className="px-4 py-2.5 text-farm-green/60 text-xs">{row.categoria}</td>
-                      <td className="px-4 py-2.5 text-center text-farm-green/50 text-xs">{row.id_banco || '—'}</td>
+                      <td className="px-4 py-2.5 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs">{row.categoria}</td>
+                      <td className="px-4 py-2.5 text-center text-farm-green/50 dark:text-[#e5e5d0]/60 text-xs">{row.id_banco || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.saldoAcum >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                         {fmt(row.saldoAcum)}
                       </td>
                       <td className={`px-4 py-2.5 text-center font-black text-xs ${row.saldoAcum >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {row.saldoAcum >= 0 ? 'C' : 'D'}
                       </td>
-                      <td className="px-4 py-2.5 text-farm-green/60 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                      <td className="px-4 py-2.5 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1983,17 +1983,17 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       {/* Filtros */}
       <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
             className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
             className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Categoria</label>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Categoria</label>
           <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
             className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
             <option value="">Todas as categorias</option>
@@ -2017,7 +2017,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
 
       {data && grupos.length === 0 && (
-        <div className="bg-white rounded-3xl p-12 text-center text-farm-green/40 italic">Nenhum lançamento encontrado no período.</div>
+        <div className="bg-white rounded-3xl p-12 text-center text-farm-green/40 dark:text-[#e5e5d0]/50 italic">Nenhum lançamento encontrado no período.</div>
       )}
 
       {/* Grupos por categoria */}
@@ -2053,9 +2053,9 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
                   return (
                     <tr key={ri} className="hover:bg-farm-cream/20 transition-colors text-sm">
                       <td className={`px-4 py-2 font-black text-xs ${cor}`}>{row.natureza}</td>
-                      <td className="px-4 py-2 text-farm-green/60 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                      <td className="px-4 py-2 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
                       <td className="px-4 py-2 font-medium uppercase">{row.historico}</td>
-                      <td className="px-4 py-2 text-center text-farm-green/50 text-xs">{row.id_banco || '—'}</td>
+                      <td className="px-4 py-2 text-center text-farm-green/50 dark:text-[#e5e5d0]/60 text-xs">{row.id_banco || '—'}</td>
                       <td className={`px-4 py-2 text-right font-bold whitespace-nowrap ${cor}`}>{fmt(v)}</td>
                     </tr>
                   );
@@ -2069,21 +2069,21 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       {data && grupos.length > 0 && (
         <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex gap-8 flex-wrap">
           <div>
-            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total lançamentos</p>
+            <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total lançamentos</p>
             <p className="text-2xl font-black">{data.rows.length}</p>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Categorias</p>
+            <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Categorias</p>
             <p className="text-2xl font-black">{grupos.length}</p>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total C (recebimentos)</p>
+            <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total C (recebimentos)</p>
             <p className="text-2xl font-black text-emerald-600">
               R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza === 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
             </p>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase text-farm-green/50 mb-1">Total D (pagamentos)</p>
+            <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total D (pagamentos)</p>
             <p className="text-2xl font-black text-rose-600">
               R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza !== 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
             </p>
@@ -2126,8 +2126,8 @@ function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
           <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Trash2 size={26} className="text-rose-500" />
           </div>
-          <h3 className="font-serif text-xl font-bold text-farm-brown mb-2">Excluir lançamento?</h3>
-          <p className="text-sm text-farm-green/60 mb-8">
+          <h3 className="font-serif text-xl font-bold text-farm-brown dark:text-[#e5e5d0] mb-2">Excluir lançamento?</h3>
+          <p className="text-sm text-farm-green/60 dark:text-[#e5e5d0]/70 mb-8">
             Esta ação não pode ser desfeita. O lançamento será removido permanentemente.
           </p>
           <div className="flex gap-3">
@@ -2183,14 +2183,14 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
     >
       {banks.length === 0 ? (
         <div className="p-12 text-center">
-          <PiggyBank className="mx-auto text-farm-green/20 mb-4" size={48} />
+          <PiggyBank className="mx-auto text-farm-green/20 dark:text-[#e5e5d0]/30 mb-4" size={48} />
           <p className="text-farm-green/40 font-medium italic">Nenhum banco cadastrado.</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[600px]">
             <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
-              <tr className="text-xs uppercase tracking-widest text-farm-green/60">
+              <tr className="text-xs uppercase tracking-widest text-farm-green/60 dark:text-[#e5e5d0]/70">
                 <th className="px-6 py-4">Nome</th>
                 <th className="px-4 py-4">Agência</th>
                 <th className="px-4 py-4">Conta</th>
@@ -2292,7 +2292,7 @@ function CategoryList({ categories, onUpdate, isReadonly }: { categories: Catego
               </div>
             ) : (
               <div className="flex justify-between items-center">
-                <span className="font-bold text-sm uppercase tracking-tight text-farm-brown leading-snug pr-2">{cat.descricao}</span>
+                <span className="font-bold text-sm uppercase tracking-tight text-farm-brown dark:text-[#e5e5d0] leading-snug pr-2">{cat.descricao}</span>
                 {!isReadonly && (
                   <button
                     onClick={() => startEdit(cat)}
@@ -2308,7 +2308,7 @@ function CategoryList({ categories, onUpdate, isReadonly }: { categories: Catego
         ))
       ) : (
         <div className="col-span-full border-2 border-dashed border-farm-green/10 rounded-3xl p-12 text-center">
-          <Tags className="mx-auto text-farm-green/20 mb-4" size={48} />
+          <Tags className="mx-auto text-farm-green/20 dark:text-[#e5e5d0]/30 mb-4" size={48} />
           <p className="text-farm-green/40 font-medium italic">Nenhuma categoria encontrada ou banco desconectado.</p>
         </div>
       )}
