@@ -800,21 +800,21 @@ function Dashboard() {
               </thead>
               <tbody className="divide-y divide-farm-green/5">
                 {recent.map((item, i) => (
-                  <tr key={i} className="hover:bg-farm-cream/20 transition-colors">
+                  <tr key={i} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors">
                     <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70 dark:text-[#e5e5d0]/70">{formatDate(item.data_lancamento)}</td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50' : 'bg-emerald-50'}`}>
+                        <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50 dark:bg-rose-900/30' : 'bg-emerald-50 dark:bg-emerald-900/30'}`}>
                           {item.natureza === 'D'
                             ? <ArrowDownCircle size={13} className="text-rose-500" />
                             : <ArrowUpCircle size={13} className="text-emerald-500" />
                           }
                         </div>
-                        <span className="text-sm font-bold uppercase truncate max-w-[200px]">{item.historico}</span>
+                        <span className="text-sm font-bold uppercase truncate max-w-[200px] dark:text-[#e5e5d0]">{item.historico}</span>
                       </div>
                     </td>
                     <td className="px-6 py-3">
-                      <span className="px-2 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase">
+                      <span className="px-2 py-1 bg-farm-cream dark:bg-white/10 text-farm-green dark:text-[#e5e5d0]/80 rounded-full text-xs font-bold uppercase">
                         {item.categoria_nome ?? '—'}
                       </span>
                     </td>
@@ -1014,7 +1014,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                       <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">{formatDate(expense.data_lancamento)}</td>
                       <td className="px-4 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
+                        <span className="px-3 py-1 bg-farm-cream dark:bg-white/10 text-farm-green dark:text-[#e5e5d0]/80 rounded-full text-xs font-bold uppercase tracking-tight">
                           {getBankName((expense as any).id_banco)}
                         </span>
                       </td>
@@ -1845,7 +1845,7 @@ function MovimentosPeriodo() {
                 </thead>
                 <tbody className="divide-y divide-farm-green/5">
                   {rows.map((row, i) => (
-                    <tr key={i} className="hover:bg-farm-cream/20 transition-colors text-sm">
+                    <tr key={i} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors text-sm">
                       <td className={`px-4 py-2.5 font-black text-xs ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
                       <td className="px-4 py-2.5 font-medium uppercase max-w-xs truncate">{row.historico}</td>
                       <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -2051,7 +2051,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
                   const v = parseFloat(row.valor);
                   const cor = row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600';
                   return (
-                    <tr key={ri} className="hover:bg-farm-cream/20 transition-colors text-sm">
+                    <tr key={ri} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors text-sm">
                       <td className={`px-4 py-2 font-black text-xs ${cor}`}>{row.natureza}</td>
                       <td className="px-4 py-2 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
                       <td className="px-4 py-2 font-medium uppercase">{row.historico}</td>
@@ -2200,7 +2200,7 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
             </thead>
             <tbody className="divide-y divide-farm-green/5">
               {banks.map(bank => (
-                <tr key={bank.id_banco} className="hover:bg-farm-cream/20 transition-colors group">
+                <tr key={bank.id_banco} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors group">
                   {editingId === bank.id_banco ? (
                     <>
                       <td className="px-4 py-2">{field('nome', 'Nome')}</td>
@@ -2220,10 +2220,10 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
                     </>
                   ) : (
                     <>
-                      <td className="px-6 py-4 font-bold text-sm uppercase">{bank.nome}</td>
-                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.numero_agencia || '—'}</td>
-                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.numero_conta || '—'}</td>
-                      <td className="px-4 py-4 text-sm text-farm-green/70">{bank.cidade || '—'}</td>
+                      <td className="px-6 py-4 font-bold text-sm uppercase dark:text-[#e5e5d0]">{bank.nome}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70 dark:text-[#e5e5d0]/70">{bank.numero_agencia || '—'}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70 dark:text-[#e5e5d0]/70">{bank.numero_conta || '—'}</td>
+                      <td className="px-4 py-4 text-sm text-farm-green/70 dark:text-[#e5e5d0]/70">{bank.cidade || '—'}</td>
                       <td className="px-4 py-4">
                         {!isReadonly && (
                           <div className="flex items-center justify-center">
@@ -2273,7 +2273,7 @@ function CategoryList({ categories, onUpdate, isReadonly }: { categories: Catego
     >
       {categories.length > 0 ? (
         categories.map(cat => (
-          <div key={cat.id_categoria_caixa} className="bg-white p-5 rounded-2xl shadow-sm border border-farm-green/5 hover:border-farm-green/20 transition-all group">
+          <div key={cat.id_categoria_caixa} className="bg-white dark:bg-[#1a1a11] p-5 rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 hover:border-farm-green/20 dark:hover:border-white/10 transition-all group">
             {editingId === cat.id_categoria_caixa ? (
               <div className="flex items-center gap-2">
                 <input
