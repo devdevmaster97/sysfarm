@@ -213,6 +213,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [banks, setBanks] = useState<{ id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expensesLoading, setExpensesLoading] = useState(false);
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
@@ -248,6 +249,7 @@ export default function App() {
   }, [activeTab]);
 
   const fetchTransactions = async (page = 1) => {
+    setExpensesLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/transactions?page=${page}&limit=${PAGE_SIZE}`, { credentials: 'include' });
       if (res.ok) {
@@ -258,6 +260,8 @@ export default function App() {
       }
     } catch (err) {
       console.error("Erro ao buscar lançamentos.");
+    } finally {
+      setExpensesLoading(false);
     }
   };
 
@@ -496,6 +500,7 @@ export default function App() {
                 totalRecords={totalRecords}
                 onPageChange={setCurrentPage}
                 isReadonly={isReadonly}
+                isLoading={expensesLoading}
               />
             )}
             {activeTab === 'categories' && (
@@ -847,7 +852,7 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange, isReadonly }: {
+function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange, isReadonly, isLoading }: {
   expenses: Expense[];
   categories: Category[];
   onEdit: (exp: Expense) => void;
@@ -857,6 +862,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
   totalRecords: number;
   onPageChange: (page: number) => void;
   isReadonly?: boolean;
+  isLoading?: boolean;
 }) {
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -877,6 +883,44 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
     const db = String(b.data_lancamento).split('T')[0];
     return db.localeCompare(da) || (b.id_caixa - a.id_caixa);
   });
+
+  if (isLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
+      >
+        {/* Cabeçalho skeleton */}
+        <div className="bg-farm-cream/50 border-b border-farm-green/10 px-6 py-4 flex items-center gap-3">
+          <div className="w-5 h-5 rounded-full bg-farm-green/20 animate-pulse" />
+          <div className="h-4 w-32 rounded-full bg-farm-green/10 animate-pulse" />
+          <div className="ml-auto h-3 w-24 rounded-full bg-farm-green/10 animate-pulse" />
+        </div>
+        {/* Linhas skeleton */}
+        <div className="divide-y divide-farm-green/5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="px-6 py-4 flex items-center gap-4" style={{ opacity: 1 - i * 0.1 }}>
+              <div className="h-3 w-20 rounded-full bg-farm-green/10 animate-pulse" />
+              <div className="h-3 flex-1 rounded-full bg-farm-green/10 animate-pulse" />
+              <div className="h-3 w-28 rounded-full bg-farm-cream animate-pulse" />
+              <div className="h-3 w-20 rounded-full bg-farm-green/10 animate-pulse" />
+              <div className="h-3 w-16 rounded-full bg-farm-green/10 animate-pulse" />
+            </div>
+          ))}
+        </div>
+        {/* Rodapé com mensagem */}
+        <div className="px-6 py-4 border-t border-farm-green/10 flex items-center gap-3 text-farm-green/50">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+            className="w-4 h-4 rounded-full border-2 border-farm-green/30 border-t-farm-green"
+          />
+          <span className="text-sm font-medium">Carregando lançamentos...</span>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
