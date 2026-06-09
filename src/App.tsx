@@ -1564,7 +1564,7 @@ function FechamentoCaixa() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
-      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
             Saldo acumulado até a data
@@ -1603,9 +1603,9 @@ function FechamentoCaixa() {
 
       {/* Relatório */}
       {data && (
-        <div id="relatorio-fechamento" className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden print:shadow-none print:rounded-none print:border-0">
+        <div id="relatorio-fechamento" className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden print:shadow-none print:rounded-none print:border-0">
           {/* Cabeçalho */}
-          <div className="bg-farm-green text-farm-cream px-8 py-6 print:bg-white print:text-black print:border-b-2 print:border-black">
+          <div className="bg-farm-green dark:bg-[#2a2a1c] text-farm-cream px-8 py-6 print:bg-white print:text-black print:border-b-2 print:border-black">
             <h2 className="font-serif text-2xl font-bold tracking-tight">FECHAMENTO DO CAIXA</h2>
             <p className="text-farm-cream/70 text-sm mt-1 print:text-gray-600">
               Saldo acumulado até {formatDateBR(data.dataFim)} &nbsp;·&nbsp; Gerado em {formatDateBR(today)}
@@ -1615,7 +1615,7 @@ function FechamentoCaixa() {
           {/* Tabela */}
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
-              <thead className="bg-farm-cream/50 border-b-2 border-farm-green/10 print:bg-gray-100">
+              <thead className="bg-farm-cream/50 dark:bg-white/5 border-b-2 border-farm-green/10 dark:border-white/5 print:bg-gray-100">
                 <tr className="text-xs uppercase tracking-widest text-farm-green/60 dark:text-[#e5e5d0]/70 print:text-gray-600">
                   <th className="px-6 py-3 w-8"></th>
                   <th className="px-2 py-3 w-10">#</th>
@@ -1625,20 +1625,20 @@ function FechamentoCaixa() {
                   <th className="px-6 py-3 text-right">Saldo</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-farm-green/5">
+              <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
                 {data.rows.map((row, i) => {
                   const saldo = parseFloat(row.saldo);
                   const label = saldo > 0 ? 'C' : saldo < 0 ? 'D' : '';
                   return (
-                    <tr key={i} className={`transition-colors ${saldo !== 0 ? 'hover:bg-farm-cream/20' : 'opacity-60'}`}>
+                    <tr key={i} className={`transition-colors ${saldo !== 0 ? 'hover:bg-farm-cream/10 dark:hover:bg-white/5' : 'opacity-50'}`}>
                       <td className={`px-6 py-3 text-xs font-black ${saldo > 0 ? 'text-emerald-600' : saldo < 0 ? 'text-rose-600' : 'text-transparent'}`}>
                         {label}
                       </td>
-                      <td className="px-2 py-3 text-sm text-farm-green/50">{row.id_banco}</td>
-                      <td className="px-2 py-3 text-sm font-bold uppercase">{row.nome}</td>
-                      <td className="px-4 py-3 text-sm text-farm-green/70">{row.numero_agencia || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-farm-green/70">{row.numero_conta || '—'}</td>
-                      <td className={`px-6 py-3 text-right font-black text-sm ${saldo > 0 ? 'text-emerald-700' : saldo < 0 ? 'text-rose-600' : 'text-farm-green/40'}`}>
+                      <td className="px-2 py-3 text-sm text-farm-green/50 dark:text-[#e5e5d0]/50">{row.id_banco}</td>
+                      <td className="px-2 py-3 text-sm font-bold uppercase dark:text-[#e5e5d0]">{row.nome}</td>
+                      <td className="px-4 py-3 text-sm text-farm-green/70 dark:text-[#e5e5d0]/70">{row.numero_agencia || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-farm-green/70 dark:text-[#e5e5d0]/70">{row.numero_conta || '—'}</td>
+                      <td className={`px-6 py-3 text-right font-black text-sm ${saldo > 0 ? 'text-emerald-700 dark:text-emerald-400' : saldo < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-farm-green/40 dark:text-[#e5e5d0]/30'}`}>
                         {fmt(Math.abs(saldo))}
                       </td>
                     </tr>
@@ -1646,15 +1646,15 @@ function FechamentoCaixa() {
                 })}
               </tbody>
               {/* Rodapé total */}
-              <tfoot className="border-t-2 border-farm-green/20 bg-farm-cream/30">
+              <tfoot className="border-t-2 border-farm-green/20 dark:border-white/10 bg-farm-cream/30 dark:bg-white/5">
                 <tr>
                   <td className={`px-6 py-4 text-sm font-black ${data.total >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {data.total >= 0 ? 'C' : 'D'}
                   </td>
-                  <td colSpan={4} className="px-2 py-4 text-sm font-black uppercase tracking-wide text-farm-brown">
+                  <td colSpan={4} className="px-2 py-4 text-sm font-black uppercase tracking-wide text-farm-brown dark:text-[#e5e5d0]">
                     SALDO TOTAL
                   </td>
-                  <td className={`px-6 py-4 text-right text-lg font-black ${data.total >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  <td className={`px-6 py-4 text-right text-lg font-black ${data.total >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                     {fmt(Math.abs(data.total))}
                   </td>
                 </tr>
@@ -1778,7 +1778,7 @@ function MovimentosPeriodo() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
-      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
@@ -1807,15 +1807,15 @@ function MovimentosPeriodo() {
         <>
           {/* Totalizadores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+            <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total Recebimentos</p>
               <p className="text-xl font-black text-emerald-600">R$ {totalC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+            <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total Pagamentos</p>
               <p className="text-xl font-black text-rose-600">R$ {totalD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-farm-green/5 p-5">
+            <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Saldo do Período</p>
               <p className={`text-xl font-black ${(totalC - totalD) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 R$ {(totalC - totalD).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1981,7 +1981,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtros */}
-      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex flex-wrap gap-4 items-end">
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
