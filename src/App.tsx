@@ -15,6 +15,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   ChevronRight,
+  ChevronDown,
   LogOut,
   User,
   Lock,
@@ -877,6 +878,15 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  const toggleRow = (id: number) =>
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
   const getCategoryName = (id: number) =>
     categories.find(c => c.id_categoria_caixa === id)?.descricao ?? `Cat. ${id}`;
 
@@ -944,52 +954,106 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
           <table className="w-full text-left min-w-[700px]">
             <thead className="bg-farm-cream/50 border-b border-farm-green/10">
               <tr className="text-xs uppercase tracking-widest text-farm-green/60">
-                <th className="px-6 py-4">Data</th>
-                <th className="px-6 py-4">Histórico</th>
-                <th className="px-6 py-4">Banco</th>
-                <th className="px-6 py-4 text-right">Valor</th>
+                <th className="px-3 py-4 w-8"></th>
+                <th className="px-4 py-4">Data</th>
+                <th className="px-4 py-4">Histórico</th>
+                <th className="px-4 py-4">Banco</th>
+                <th className="px-4 py-4 text-right">Valor</th>
                 <th className="px-4 py-4">Usuário</th>
                 <th className="px-4 py-4 text-center">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-farm-green/5">
-              {sortedExpenses.map(expense => (
-                <tr key={expense.id_caixa} className="hover:bg-farm-cream/20 transition-colors group">
-                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">{formatDate(expense.data_lancamento)}</td>
-                  <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
-                      {getBankName((expense as any).id_banco)}
-                    </span>
-                  </td>
-                  <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
-                  </td>
-                  <td className="px-4 py-4 text-xs text-farm-green/50 whitespace-nowrap">
-                    {(expense as any).usuario_nome || '—'}
-                  </td>
-                  <td className="px-4 py-4">
-                    {!isReadonly && (
-                      <div className="flex items-center justify-center gap-2">
+            <tbody>
+              {sortedExpenses.map(expense => {
+                const isExpanded = expandedRows.has(expense.id_caixa);
+                return (
+                  <React.Fragment key={expense.id_caixa}>
+                    {/* Linha principal */}
+                    <tr className={`transition-colors group border-b border-farm-green/5 ${isExpanded ? 'bg-farm-cream/30' : 'hover:bg-farm-cream/20'}`}>
+                      {/* Botão colapso */}
+                      <td className="px-3 py-4">
                         <button
-                          onClick={() => onEdit(expense)}
-                          className="p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all"
-                          title="Editar"
+                          onClick={() => toggleRow(expense.id_caixa)}
+                          className="p-1 text-farm-green/40 hover:text-farm-green hover:bg-farm-cream rounded-lg transition-all"
+                          title={isExpanded ? 'Recolher' : 'Expandir'}
                         >
-                          <Pencil size={15} />
+                          <motion.div
+                            animate={{ rotate: isExpanded ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown size={14} />
+                          </motion.div>
                         </button>
-                        <button
-                          onClick={() => onDelete(expense.id_caixa)}
-                          className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all"
-                          title="Excluir"
+                      </td>
+                      <td className="px-4 py-4 text-sm font-medium whitespace-nowrap">{formatDate(expense.data_lancamento)}</td>
+                      <td className="px-4 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
+                          {getBankName((expense as any).id_banco)}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        {expense.natureza === 'D' ? '- ' : '+ '}{formatCurrency(expense.valor)}
+                      </td>
+                      <td className="px-4 py-4 text-xs text-farm-green/50 whitespace-nowrap">
+                        {(expense as any).usuario_nome || '—'}
+                      </td>
+                      <td className="px-4 py-4">
+                        {!isReadonly && (
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => onEdit(expense)} className="p-2 text-farm-green hover:bg-farm-cream rounded-lg transition-all" title="Editar">
+                              <Pencil size={15} />
+                            </button>
+                            <button onClick={() => onDelete(expense.id_caixa)} className="p-2 text-rose-400 hover:bg-rose-50 rounded-lg transition-all" title="Excluir">
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* Linha de detalhe (colapso) */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.tr
+                          key={`detail-${expense.id_caixa}`}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.15 }}
                         >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                          <td colSpan={7} className="px-0 py-0 border-b border-farm-green/10">
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: 'auto' }}
+                              exit={{ height: 0 }}
+                              transition={{ duration: 0.2 }}
+                              style={{ overflow: 'hidden' }}
+                            >
+                              <div className="px-8 py-3 bg-farm-cream/20 flex flex-wrap gap-6 items-center">
+                                <div className="flex items-center gap-2">
+                                  <Tags size={13} className="text-farm-green/40" />
+                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40">Categoria:</span>
+                                  <span className="text-xs font-bold uppercase text-farm-brown">
+                                    {getCategoryName(expense.id_categoria_caixa)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Receipt size={13} className="text-farm-green/40" />
+                                  <span className="text-xs font-bold uppercase tracking-wide text-farm-green/40">Tipo:</span>
+                                  <span className={`text-xs font-black uppercase ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                    {expense.natureza === 'D' ? 'Débito' : 'Crédito'}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          </td>
+                        </motion.tr>
+                      )}
+                    </AnimatePresence>
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
