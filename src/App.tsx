@@ -493,6 +493,7 @@ export default function App() {
               <ExpenseList
                 expenses={expenses}
                 categories={categories}
+                banks={banks}
                 onEdit={(exp) => { setEditingExpense(exp); setExpenseModalOpen(true); }}
                 onDelete={(id) => setDeletingExpenseId(id)}
                 currentPage={currentPage}
@@ -852,9 +853,10 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
   );
 }
 
-function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange, isReadonly, isLoading }: {
+function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPage, totalPages, totalRecords, onPageChange, isReadonly, isLoading }: {
   expenses: Expense[];
   categories: Category[];
+  banks: { id_banco: number; nome: string }[];
   onEdit: (exp: Expense) => void;
   onDelete: (id: number) => void;
   currentPage: number;
@@ -877,6 +879,9 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
 
   const getCategoryName = (id: number) =>
     categories.find(c => c.id_categoria_caixa === id)?.descricao ?? `Cat. ${id}`;
+
+  const getBankName = (id: number | null | undefined) =>
+    id ? (banks.find(b => b.id_banco === id)?.nome ?? `Banco ${id}`) : '—';
 
   const sortedExpenses = [...expenses].sort((a, b) => {
     const da = String(a.data_lancamento).split('T')[0];
@@ -941,7 +946,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
               <tr className="text-xs uppercase tracking-widest text-farm-green/60">
                 <th className="px-6 py-4">Data</th>
                 <th className="px-6 py-4">Histórico</th>
-                <th className="px-6 py-4">Categoria</th>
+                <th className="px-6 py-4">Banco</th>
                 <th className="px-6 py-4 text-right">Valor</th>
                 <th className="px-4 py-4">Usuário</th>
                 <th className="px-4 py-4 text-center">Ações</th>
@@ -954,7 +959,7 @@ function ExpenseList({ expenses, categories, onEdit, onDelete, currentPage, tota
                   <td className="px-6 py-4 text-sm font-bold group-hover:text-farm-green uppercase">{expense.historico}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="px-3 py-1 bg-farm-cream text-farm-green rounded-full text-xs font-bold uppercase tracking-tight">
-                      {getCategoryName(expense.id_categoria_caixa)}
+                      {getBankName((expense as any).id_banco)}
                     </span>
                   </td>
                   <td className={`px-6 py-4 text-right font-black whitespace-nowrap ${expense.natureza === 'D' ? 'text-rose-600' : 'text-emerald-600'}`}>
