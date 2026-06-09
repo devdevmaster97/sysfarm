@@ -1824,15 +1824,15 @@ function MovimentosPeriodo() {
           </div>
 
           {/* Tabela */}
-          <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
-            <div className="px-6 py-4 border-b border-farm-green/10 flex items-center justify-between">
-              <h3 className="font-serif text-lg font-bold">Movimentos — {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}</h3>
+          <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+            <div className="px-6 py-4 border-b border-farm-green/10 dark:border-white/5 flex items-center justify-between">
+              <h3 className="font-serif text-lg font-bold dark:text-[#e5e5d0]">Movimentos — {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}</h3>
               <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">{rows.length} lançamentos</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[800px]">
                 <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
-                  <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+                  <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
                     <th className="px-4 py-3 w-8">D/C</th>
                     <th className="px-4 py-3">Histórico</th>
                     <th className="px-4 py-3 text-right">Valor</th>
@@ -1843,11 +1843,11 @@ function MovimentosPeriodo() {
                     <th className="px-4 py-3">Data</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-farm-green/5">
+                <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
                   {rows.map((row, i) => (
                     <tr key={i} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors text-sm">
                       <td className={`px-4 py-2.5 font-black text-xs ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
-                      <td className="px-4 py-2.5 font-medium uppercase max-w-xs truncate">{row.historico}</td>
+                      <td className="px-4 py-2.5 font-medium uppercase max-w-xs truncate dark:text-[#e5e5d0]">{row.historico}</td>
                       <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {fmt(row.val)}
                       </td>
@@ -2017,28 +2017,28 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
 
       {data && grupos.length === 0 && (
-        <div className="bg-white rounded-3xl p-12 text-center text-farm-green/40 dark:text-[#e5e5d0]/50 italic">Nenhum lançamento encontrado no período.</div>
+        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl p-12 text-center text-farm-green/40 dark:text-[#e5e5d0]/50 italic">Nenhum lançamento encontrado no período.</div>
       )}
 
       {/* Grupos por categoria */}
       {grupos.map((g, gi) => (
-        <div key={gi} className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
-          <div className={`px-6 py-4 border-b-2 ${g.total >= 0 ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+        <div key={gi} className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+          <div className={`px-6 py-4 border-b-2 ${g.total >= 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-900/20'}`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-serif text-lg font-bold uppercase tracking-wide">{g.cat}</h3>
+              <h3 className="font-serif text-lg font-bold uppercase tracking-wide dark:text-[#e5e5d0]">{g.cat}</h3>
               <div className="text-right">
-                <span className={`text-lg font-black ${g.total >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                <span className={`text-lg font-black ${g.total >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   {g.total < 0 ? '-' : ''}R$ {fmt(g.total)}&nbsp;
                   <span className="text-sm">{g.total >= 0 ? 'C' : 'D'}</span>
                 </span>
-                <p className="text-xs text-farm-green/40">{g.rows.length} lançamento{g.rows.length !== 1 ? 's' : ''}</p>
+                <p className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50">{g.rows.length} lançamento{g.rows.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[600px]">
-              <thead className="bg-farm-cream/30 border-b border-farm-green/10">
-                <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+              <thead className="bg-farm-cream/30 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
                   <th className="px-4 py-2.5 w-8">D/C</th>
                   <th className="px-4 py-2.5">Data</th>
                   <th className="px-4 py-2.5">Histórico</th>
@@ -2046,15 +2046,15 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
                   <th className="px-4 py-2.5 text-right">Valor</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-farm-green/5">
+              <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
                 {g.rows.map((row, ri) => {
                   const v = parseFloat(row.valor);
-                  const cor = row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600';
+                  const cor = row.natureza === 'C' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
                   return (
                     <tr key={ri} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors text-sm">
                       <td className={`px-4 py-2 font-black text-xs ${cor}`}>{row.natureza}</td>
                       <td className="px-4 py-2 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
-                      <td className="px-4 py-2 font-medium uppercase">{row.historico}</td>
+                      <td className="px-4 py-2 font-medium uppercase dark:text-[#e5e5d0]">{row.historico}</td>
                       <td className="px-4 py-2 text-center text-farm-green/50 dark:text-[#e5e5d0]/60 text-xs">{row.id_banco || '—'}</td>
                       <td className={`px-4 py-2 text-right font-bold whitespace-nowrap ${cor}`}>{fmt(v)}</td>
                     </tr>
@@ -2067,7 +2067,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       ))}
 
       {data && grupos.length > 0 && (
-        <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 p-6 flex gap-8 flex-wrap">
+        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex gap-8 flex-wrap">
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total lançamentos</p>
             <p className="text-2xl font-black">{data.rows.length}</p>
