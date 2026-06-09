@@ -767,10 +767,10 @@ function Dashboard() {
       </div>
 
       {/* Recent Activity — full width */}
-      <div className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden">
-        <div className="p-6 border-b border-farm-green/10 flex items-center gap-2">
-          <Calendar size={20} className="text-farm-green" />
-          <h3 className="text-xl font-serif font-bold">Atividade Recente</h3>
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+        <div className="p-6 border-b border-farm-green/10 dark:border-white/5 flex items-center gap-2">
+          <Calendar size={20} className="text-farm-green dark:text-[#e5e5d0]/70" />
+          <h3 className="text-xl font-serif font-bold dark:text-[#e5e5d0]">Atividade Recente</h3>
           <span className="ml-auto text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">Últimos 10 lançamentos</span>
         </div>
         {loading ? (
@@ -790,18 +790,18 @@ function Dashboard() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[500px]">
-              <thead className="bg-farm-cream/50">
-                <tr className="text-xs uppercase tracking-widest text-farm-green/50">
+              <thead className="bg-farm-cream/50 dark:bg-white/5">
+                <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
                   <th className="px-6 py-3">Data</th>
                   <th className="px-6 py-3">Histórico</th>
                   <th className="px-6 py-3">Categoria</th>
                   <th className="px-6 py-3 text-right">Valor</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-farm-green/5">
+              <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
                 {recent.map((item, i) => (
                   <tr key={i} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors">
-                    <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70 dark:text-[#e5e5d0]/70">{formatDate(item.data_lancamento)}</td>
+                    <td className="px-6 py-3 text-sm font-medium whitespace-nowrap text-farm-green/70 dark:text-[#e5e5d0]">{formatDate(item.data_lancamento)}</td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
                         <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.natureza === 'D' ? 'bg-rose-50 dark:bg-rose-900/30' : 'bg-emerald-50 dark:bg-emerald-900/30'}`}>
@@ -847,9 +847,9 @@ function Dashboard() {
                   <span className="text-xs font-bold uppercase tracking-tight text-farm-brown dark:text-[#e5e5d0] truncate pr-2">{c.categoria ?? 'Sem categoria'}</span>
                   <span className="text-xs font-black text-rose-600 flex-shrink-0">{fmt(c.total)}</span>
                 </div>
-                <div className="h-2 bg-farm-cream rounded-full overflow-hidden">
+                <div className="h-2 bg-farm-cream dark:bg-white/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-farm-green rounded-full transition-all"
+                    className="h-full bg-farm-green dark:bg-[#7a7a58] rounded-full transition-all"
                     style={{ width: `${Math.round((c.total / maxCategoria) * 100)}%` }}
                   />
                 </div>
