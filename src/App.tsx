@@ -27,7 +27,9 @@ import {
   Download,
   Share,
   Printer,
-  FileText
+  FileText,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -209,8 +211,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarOpen, setSidebarOpen] = useState(false); // Mobile closed by default
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('sysfarm_theme') === 'dark');
+
+  useEffect(() => {
+    localStorage.setItem('sysfarm_theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [banks, setBanks] = useState<{ id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -403,6 +410,25 @@ export default function App() {
             </div>
           </div>
         )}
+        {/* Botão tema claro/escuro */}
+        <button
+          onClick={() => setIsDark(d => !d)}
+          className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-farm-cream/10 text-farm-cream/70 hover:text-farm-cream transition-all"
+          title={isDark ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+        >
+          <motion.div
+            key={isDark ? 'moon' : 'sun'}
+            initial={{ rotate: -30, opacity: 0 }}
+            animate={{ rotate: 0, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </motion.div>
+          {(isMobile || isDesktopSidebarOpen) && (
+            <span className="font-medium">{isDark ? 'Tema Claro' : 'Tema Escuro'}</span>
+          )}
+        </button>
+
         <button 
           onClick={handleLogout}
           className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-rose-500/20 text-rose-300 transition-all"
@@ -424,7 +450,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex bg-farm-cream text-farm-brown overflow-x-hidden">
+    <div className={`min-h-screen flex bg-farm-cream dark:bg-[#0f0f09] text-farm-brown dark:text-[#e5e5d0] overflow-x-hidden${isDark ? ' dark' : ''}`}>
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -450,7 +476,7 @@ export default function App() {
 
       {/* Desktop Sidebar (Persistent) */}
       <aside 
-        className={`hidden lg:flex flex-col flex-shrink-0 bg-farm-green transition-all duration-300 ${
+        className={`hidden lg:flex flex-col flex-shrink-0 bg-farm-green dark:bg-[#1e1e14] transition-all duration-300 ${
           isDesktopSidebarOpen ? 'w-[280px]' : 'w-[80px]'
         }`}
       >
@@ -460,7 +486,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 lg:h-20 border-b border-farm-green/10 flex items-center justify-between px-4 lg:px-8 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+        <header className="h-16 lg:h-20 border-b border-farm-green/10 dark:border-white/5 flex items-center justify-between px-4 lg:px-8 bg-white/50 dark:bg-[#1a1a11]/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setSidebarOpen(true)}
@@ -804,7 +830,7 @@ function Dashboard() {
       </div>
 
       {/* By Category */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5">
+      <div className="bg-white dark:bg-[#1a1a11] p-6 rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5">
         <h3 className="text-xl font-serif font-bold mb-1">Despesas por Categoria</h3>
         <p className="text-xs text-farm-green/40 mb-5 italic capitalize">{monthName}</p>
         {loading ? (
@@ -838,7 +864,7 @@ function Dashboard() {
 
 function StatCard({ title, value, icon: Icon, color, trend }: any) {
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-farm-green/5 flex flex-col gap-4">
+    <div className="bg-white dark:bg-[#1a1a11] p-6 rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 flex flex-col gap-4">
       <div className="flex justify-between items-start">
         <div className="p-3 bg-farm-cream rounded-2xl">
           <Icon className={color} size={24} />
@@ -904,7 +930,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
+        className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden"
       >
         {/* Cabeçalho skeleton */}
         <div className="bg-farm-cream/50 border-b border-farm-green/10 px-6 py-4 flex items-center gap-3">
@@ -941,7 +967,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
+      className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden"
     >
       {expenses.length === 0 ? (
         <div className="p-12 text-center">
@@ -952,7 +978,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[700px]">
-            <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+            <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
               <tr className="text-xs uppercase tracking-widest text-farm-green/60">
                 <th className="px-3 py-4 w-8"></th>
                 <th className="px-4 py-4">Data</th>
@@ -969,7 +995,7 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                 return (
                   <React.Fragment key={expense.id_caixa}>
                     {/* Linha principal */}
-                    <tr className={`transition-colors group border-b border-farm-green/5 ${isExpanded ? 'bg-farm-cream/30' : 'hover:bg-farm-cream/20'}`}>
+                    <tr className={`transition-colors group border-b border-farm-green/5 dark:border-white/5 ${isExpanded ? 'bg-farm-cream/30 dark:bg-white/5' : 'hover:bg-farm-cream/10 dark:hover:bg-white/5'}`}>
                       {/* Botão colapso */}
                       <td className="px-3 py-4">
                         <button
@@ -1241,7 +1267,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         >
           <div className="bg-farm-green p-8 rounded-t-3xl">
             <div className="flex justify-between items-center">
@@ -1279,7 +1305,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
                   required
                   value={formData.data_lancamento}
                   onChange={(e) => setFormData({ ...formData, data_lancamento: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
                 />
               </div>
 
@@ -1354,7 +1380,7 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
                   required
                   value={formData.id_categoria_caixa}
                   onChange={(e) => setFormData({ ...formData, id_categoria_caixa: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium"
+                  className="w-full px-4 py-3 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
                 >
                   <option value="">Selecione...</option>
                   {categories.map(cat => (
@@ -1547,7 +1573,7 @@ function FechamentoCaixa() {
             type="date"
             value={dataFim}
             onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium"
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
           />
         </div>
         <button
@@ -1756,12 +1782,12 @@ function MovimentosPeriodo() {
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <button onClick={buscar} disabled={loading}
           className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
@@ -1805,7 +1831,7 @@ function MovimentosPeriodo() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[800px]">
-                <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+                <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
                   <tr className="text-xs uppercase tracking-widest text-farm-green/50">
                     <th className="px-4 py-3 w-8">D/C</th>
                     <th className="px-4 py-3">Histórico</th>
@@ -1959,17 +1985,17 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium" />
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <div>
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 mb-2">Categoria</label>
           <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px]">
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
             <option value="">Todas as categorias</option>
             {categories.map(c => (
               <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
@@ -2095,7 +2121,7 @@ function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center"
+          className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-2xl w-full max-w-sm p-8 text-center"
         >
           <div className="w-14 h-14 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Trash2 size={26} className="text-rose-500" />
@@ -2153,7 +2179,7 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="bg-white rounded-3xl shadow-sm border border-farm-green/5 overflow-hidden"
+      className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden"
     >
       {banks.length === 0 ? (
         <div className="p-12 text-center">
@@ -2163,7 +2189,7 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[600px]">
-            <thead className="bg-farm-cream/50 border-b border-farm-green/10">
+            <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
               <tr className="text-xs uppercase tracking-widest text-farm-green/60">
                 <th className="px-6 py-4">Nome</th>
                 <th className="px-4 py-4">Agência</th>
