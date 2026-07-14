@@ -29,7 +29,9 @@ import {
   Printer,
   FileText,
   Moon,
-  Sun
+  Sun,
+  Search,
+  FilterX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { API_URL } from './config';
@@ -55,6 +57,19 @@ interface Expense {
   natureza: 'D' | 'C';
   id_categoria_caixa: number;
 }
+
+interface ExpenseFiltersType {
+  startDate: string;
+  endDate: string;
+  historico: string;
+  banco: string;
+  valor: string;
+  usuario: string;
+}
+
+const EMPTY_EXPENSE_FILTERS: ExpenseFiltersType = {
+  startDate: '', endDate: '', historico: '', banco: '', valor: '', usuario: ''
+};
 
 const PWA_DISMISSED_KEY = 'sysfarm_pwa_dismissed';
 
@@ -229,6 +244,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [expenseFilters, setExpenseFilters] = useState<ExpenseFiltersType>(EMPTY_EXPENSE_FILTERS);
   const PAGE_SIZE = 50;
 
   // Fetch categories and banks on login
@@ -244,22 +260,34 @@ export default function App() {
       .catch(() => {});
   }, [user]);
 
-  // Fetch transactions when expenses tab is active or page changes
+  // Fetch transactions when expenses tab is active, page or filters change (debounced)
   useEffect(() => {
-    if (activeTab === 'expenses' && user) {
-      fetchTransactions(currentPage);
-    }
-  }, [activeTab, user, currentPage]);
+    if (activeTab !== 'expenses' || !user) return;
+    const timer = setTimeout(() => fetchTransactions(currentPage), 350);
+    return () => clearTimeout(timer);
+  }, [activeTab, user, currentPage, expenseFilters]);
 
   // Reset page when leaving expenses tab
   useEffect(() => {
     if (activeTab !== 'expenses') setCurrentPage(1);
   }, [activeTab]);
 
+  const handleExpenseFiltersChange = (f: ExpenseFiltersType) => {
+    setExpenseFilters(f);
+    setCurrentPage(1);
+  };
+
   const fetchTransactions = async (page = 1) => {
     setExpensesLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/transactions?page=${page}&limit=${PAGE_SIZE}`, { credentials: 'include' });
+      const qs = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+      if (expenseFilters.startDate) qs.set('startDate', expenseFilters.startDate);
+      if (expenseFilters.endDate)   qs.set('endDate', expenseFilters.endDate);
+      if (expenseFilters.historico.trim()) qs.set('historico', expenseFilters.historico.trim());
+      if (expenseFilters.banco)     qs.set('banco', expenseFilters.banco);
+      if (expenseFilters.valor.trim())  qs.set('valor', expenseFilters.valor.trim());
+      if (expenseFilters.usuario.trim()) qs.set('usuario', expenseFilters.usuario.trim());
+      const res = await fetch(`${API_URL}/api/transactions?${qs.toString()}`, { credentials: 'include' });
       if (res.ok) {
         const json = await res.json();
         setExpenses(json.data ?? json);
@@ -517,6 +545,12 @@ export default function App() {
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && <Dashboard />}
             {activeTab === 'expenses' && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <ExpenseFilterBar
+                filters={expenseFilters}
+                onChange={handleExpenseFiltersChange}
+                banks={banks}
+              />
               <ExpenseList
                 expenses={expenses}
                 categories={categories}
@@ -530,6 +564,7 @@ export default function App() {
                 isReadonly={isReadonly}
                 isLoading={expensesLoading}
               />
+              </motion.div>
             )}
             {activeTab === 'categories' && (
               <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
@@ -876,6 +911,103 @@ function StatCard({ title, value, icon: Icon, color, trend }: any) {
         <p className="text-3xl font-serif font-black mt-1">{value}</p>
       </div>
       <p className="text-xs font-semibold text-farm-green/40 dark:text-[#e5e5d0]/50 italic">{trend}</p>
+    </div>
+  );
+}
+
+function ExpenseFilterBar({ filters, onChange, banks }: {
+  filters: ExpenseFiltersType;
+  onChange: (f: ExpenseFiltersType) => void;
+  banks: { id_banco: number; nome: string }[];
+}) {
+  const set = (key: keyof ExpenseFiltersType, value: string) =>
+    onChange({ ...filters, [key]: value });
+
+  const hasActive = Object.values(filters).some(v => v !== '');
+
+  const inputClass = "w-full px-3 py-2 text-sm border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]";
+  const labelClass = "block text-[10px] font-bold text-farm-green/60 dark:text-[#e5e5d0]/60 mb-1 uppercase tracking-widest";
+
+  return (
+    <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 lg:p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Search size={15} className="text-farm-green/50 dark:text-[#e5e5d0]/60" />
+        <span className="text-xs font-bold uppercase tracking-widest text-farm-green/60 dark:text-[#e5e5d0]/70">Filtros</span>
+        {hasActive && (
+          <button
+            onClick={() => onChange(EMPTY_EXPENSE_FILTERS)}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
+            title="Limpar todos os filtros"
+          >
+            <FilterX size={13} />
+            Limpar filtros
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div>
+          <label className={labelClass}>Data início</label>
+          <input
+            type="date"
+            value={filters.startDate}
+            onChange={(e) => set('startDate', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Data fim</label>
+          <input
+            type="date"
+            value={filters.endDate}
+            onChange={(e) => set('endDate', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Histórico</label>
+          <input
+            type="text"
+            placeholder="Pesquisar..."
+            value={filters.historico}
+            onChange={(e) => set('historico', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Banco</label>
+          <select
+            value={filters.banco}
+            onChange={(e) => set('banco', e.target.value)}
+            className={inputClass}
+          >
+            <option value="">Todos</option>
+            {banks.map(b => (
+              <option key={b.id_banco} value={b.id_banco}>{b.nome}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Valor</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="Ex: 150,00"
+            value={filters.valor}
+            onChange={(e) => set('valor', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Usuário</label>
+          <input
+            type="text"
+            placeholder="Nome..."
+            value={filters.usuario}
+            onChange={(e) => set('usuario', e.target.value)}
+            className={inputClass}
+          />
+        </div>
+      </div>
     </div>
   );
 }

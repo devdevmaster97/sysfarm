@@ -181,10 +181,17 @@ async function startServer() {
 
   app.get("/api/transactions", async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, categoria, natureza, page, limit } = req.query;
+      const { startDate, endDate, categoria, natureza, page, limit, historico, banco, valor, usuario } = req.query;
       const pageNum = Math.max(1, parseInt(String(page || '1'), 10));
       const limitNum = Math.min(200, Math.max(1, parseInt(String(limit || '50'), 10)));
       const offset = (pageNum - 1) * limitNum;
+
+      // Verifica se a coluna id_usuario existe na tabela caixa
+      const colCheck = await pool.query(`
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='caixa' AND column_name='id_usuario'
+      `);
+      const hasUsuario = colCheck.rowCount > 0;
 
       let whereClause = 'WHERE 1=1';
       const params: any[] = [];
@@ -194,19 +201,22 @@ async function startServer() {
       if (endDate)   { whereClause += ` AND c.data_lancamento <= $${paramCount++}`; params.push(endDate); }
       if (categoria) { whereClause += ` AND c.id_categoria_caixa = $${paramCount++}`; params.push(categoria); }
       if (natureza)  { whereClause += ` AND c.natureza = $${paramCount++}`; params.push(natureza); }
+      if (historico) { whereClause += ` AND c.historico ILIKE $${paramCount++}`; params.push(`%${historico}%`); }
+      if (banco)     { whereClause += ` AND c.id_banco = $${paramCount++}`; params.push(banco); }
+      if (valor) {
+        const valorNum = parseFloat(String(valor).replace(',', '.'));
+        if (!isNaN(valorNum)) { whereClause += ` AND c.valor = $${paramCount++}`; params.push(valorNum); }
+      }
+      if (usuario && hasUsuario) {
+        whereClause += ` AND c.id_usuario IN (SELECT id_usuario FROM usuarios WHERE nome ILIKE $${paramCount++})`;
+        params.push(`%${usuario}%`);
+      }
 
       const countResult = await pool.query(
         `SELECT COUNT(*) as total FROM caixa c ${whereClause}`,
         params
       );
       const total = parseInt(countResult.rows[0].total, 10);
-
-      // Verifica se a coluna id_usuario existe na tabela caixa
-      const colCheck = await pool.query(`
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='caixa' AND column_name='id_usuario'
-      `);
-      const hasUsuario = colCheck.rowCount > 0;
 
       const dataResult = await pool.query(
         `SELECT c.*, cat.descricao as categoria_nome
