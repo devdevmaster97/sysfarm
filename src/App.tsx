@@ -2013,6 +2013,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   const [dataFim, setDataFim] = useState(today);
   const [categoriaId, setCategoriaId] = useState('');
   const [visualizacao, setVisualizacao] = useState<'detalhado' | 'resumo' | 'debitos' | 'creditos'>('detalhado');
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<string>>(new Set());
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2028,7 +2029,12 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       const res = await fetch(`${API_URL}/api/reports/movimentos-categoria?${params}`, { credentials: 'include' });
       const json = await res.json();
       if (json.status === 'error') setError(json.detail || json.message);
-      else setData(json);
+      else {
+        setData(json);
+        setCategoriasSelecionadas(new Set(
+          (json.rows ?? []).map((row: any) => row.categoria || 'Sem categoria')
+        ));
+      }
     } catch { setError('Erro de conexão.'); }
     finally { setLoading(false); }
   };
@@ -2080,10 +2086,57 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       .sort((a, b) => Math.abs(b.valorResumo) - Math.abs(a.valorResumo));
   }, [grupos, visualizacao]);
 
+  const gruposSelecionados = React.useMemo(
+    () => grupos.filter(g => categoriasSelecionadas.has(g.cat)),
+    [grupos, categoriasSelecionadas]
+  );
+
+  const gruposResumoSelecionados = React.useMemo(
+    () => gruposResumo.filter(g => categoriasSelecionadas.has(g.cat)),
+    [gruposResumo, categoriasSelecionadas]
+  );
+
+  const categoriasVisiveis = visualizacao === 'detalhado'
+    ? grupos.map(g => g.cat)
+    : gruposResumo.map(g => g.cat);
+
+  const totalCategoriasVisiveisSelecionadas = categoriasVisiveis.filter(
+    cat => categoriasSelecionadas.has(cat)
+  ).length;
+
+  const toggleCategoria = (categoria: string) => {
+    setCategoriasSelecionadas(prev => {
+      const next = new Set(prev);
+      if (next.has(categoria)) next.delete(categoria);
+      else next.add(categoria);
+      return next;
+    });
+  };
+
+  const marcarCategoriasVisiveis = () => {
+    setCategoriasSelecionadas(prev => {
+      const next = new Set(prev);
+      categoriasVisiveis.forEach(cat => next.add(cat));
+      return next;
+    });
+  };
+
+  const desmarcarCategoriasVisiveis = () => {
+    setCategoriasSelecionadas(prev => {
+      const next = new Set(prev);
+      categoriasVisiveis.forEach(cat => next.delete(cat));
+      return next;
+    });
+  };
+
   const imprimir = () => {
-    if (!data || grupos.length === 0) return;
+    const gruposParaImpressao = visualizacao === 'detalhado'
+      ? gruposSelecionados
+      : gruposResumoSelecionados;
+    if (!data || gruposParaImpressao.length === 0) return;
+
     let totalAcum = 0;
-    const secoesDetalhadas = grupos.map(g => {
+    const secoesDetalhadas = gruposSelecionados.map(g => {
       totalAcum += g.rows.length;
       const linhas = g.rows.map(r => {
         const v = parseFloat(r.valor);
@@ -2125,7 +2178,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       creditos: 'Somente créditos por categoria'
     }[visualizacao];
 
-    const linhasResumo = gruposResumo.map(g => {
+    const linhasResumo = gruposResumoSelecionados.map(g => {
       const cor = g.naturezaResumo === 'C' ? '#16a34a' : '#dc2626';
       const prefixo = visualizacao === 'resumo' && g.valorResumo < 0 ? '-' : '';
       return `<tr style="border-bottom:1px solid #e5e5e5">
@@ -2136,7 +2189,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       </tr>`;
     }).join('');
 
-    const totalResumo = gruposResumo.reduce((acc, g) => acc + (
+    const totalResumo = gruposResumoSelecionados.reduce((acc, g) => acc + (
       visualizacao === 'resumo' ? g.valorResumo : Math.abs(g.valorResumo)
     ), 0);
     const naturezaTotalResumo = visualizacao === 'debitos'
@@ -2179,7 +2232,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       </style>
     </head><body>
       <h2>MOVIMENTOS POR CATEGORIA</h2>
-      <p class="sub">${tituloVisualizacao} &nbsp;·&nbsp; Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${visualizacao === 'detalhado' ? grupos.length : gruposResumo.length} categorias</p>
+      <p class="sub">${tituloVisualizacao} &nbsp;·&nbsp; Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${gruposParaImpressao.length} categorias selecionadas</p>
       ${conteudo}
     </body></html>`;
 
@@ -2225,8 +2278,12 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
           <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
         </button>
         {data && (
-          <button onClick={imprimir}
-            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2">
+          <button
+            onClick={imprimir}
+            disabled={totalCategoriasVisiveisSelecionadas === 0}
+            title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Imprimir categorias selecionadas'}
+            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <Printer size={18} />Imprimir
           </button>
         )}
@@ -2261,6 +2318,32 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             </button>
           ))}
         </div>
+
+        {data && categoriasVisiveis.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-2 pt-4 mt-4 border-t border-farm-green/10 dark:border-white/10">
+            <span className="text-xs font-medium text-farm-green/60 dark:text-[#e5e5d0]/70">
+              {totalCategoriasVisiveisSelecionadas} de {categoriasVisiveis.length} categorias selecionadas para impressão
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={marcarCategoriasVisiveis}
+                disabled={totalCategoriasVisiveisSelecionadas === categoriasVisiveis.length}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-farm-green dark:text-[#e5e5d0] hover:bg-farm-cream dark:hover:bg-white/10 disabled:opacity-40 transition-colors"
+              >
+                Marcar todas
+              </button>
+              <button
+                type="button"
+                onClick={desmarcarCategoriasVisiveis}
+                disabled={totalCategoriasVisiveisSelecionadas === 0}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-40 transition-colors"
+              >
+                Desmarcar todas
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
@@ -2273,10 +2356,26 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
 
       {/* Grupos por categoria */}
       {visualizacao === 'detalhado' && grupos.map((g, gi) => (
-        <div key={gi} className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+        <div
+          key={gi}
+          className={`bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border dark:border-white/5 overflow-hidden transition-opacity ${
+            categoriasSelecionadas.has(g.cat)
+              ? 'border-farm-green/5'
+              : 'border-farm-green/10 opacity-60'
+          }`}
+        >
           <div className={`px-6 py-4 border-b-2 ${g.total >= 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-900/20'}`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-serif text-lg font-bold uppercase tracking-wide dark:text-[#e5e5d0]">{g.cat}</h3>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={categoriasSelecionadas.has(g.cat)}
+                  onChange={() => toggleCategoria(g.cat)}
+                  className="h-5 w-5 rounded accent-farm-green cursor-pointer"
+                  aria-label={`Incluir ${g.cat} na impressão`}
+                />
+                <h3 className="font-serif text-lg font-bold uppercase tracking-wide dark:text-[#e5e5d0]">{g.cat}</h3>
+              </label>
               <div className="text-right">
                 <span className={`text-lg font-black ${g.total >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                   {g.total < 0 ? '-' : ''}R$ {fmt(g.total)}&nbsp;
@@ -2335,14 +2434,26 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             {gruposResumo.map(g => {
               const isCredito = g.naturezaResumo === 'C';
               const prefixo = visualizacao === 'resumo' && g.valorResumo < 0 ? '- ' : '';
+              const selecionada = categoriasSelecionadas.has(g.cat);
               return (
                 <div
                   key={g.cat}
-                  className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-farm-cream/30 dark:hover:bg-white/5 transition-colors"
+                  className={`flex items-center justify-between gap-4 px-6 py-4 hover:bg-farm-cream/30 dark:hover:bg-white/5 transition-all ${
+                    selecionada ? '' : 'opacity-50'
+                  }`}
                 >
-                  <span className="text-sm font-bold uppercase text-farm-brown dark:text-[#e5e5d0]">
-                    {g.cat}
-                  </span>
+                  <label className="flex min-w-0 items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selecionada}
+                      onChange={() => toggleCategoria(g.cat)}
+                      className="h-5 w-5 shrink-0 rounded accent-farm-green cursor-pointer"
+                      aria-label={`Incluir ${g.cat} na impressão`}
+                    />
+                    <span className="text-sm font-bold uppercase text-farm-brown dark:text-[#e5e5d0]">
+                      {g.cat}
+                    </span>
+                  </label>
                   <span className={`shrink-0 text-base font-black ${
                     isCredito
                       ? 'text-emerald-700 dark:text-emerald-400'
@@ -2361,7 +2472,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
               Total geral
             </span>
             {(() => {
-              const total = gruposResumo.reduce((acc, g) => acc + (
+              const total = gruposResumoSelecionados.reduce((acc, g) => acc + (
                 visualizacao === 'resumo' ? g.valorResumo : Math.abs(g.valorResumo)
               ), 0);
               const natureza = visualizacao === 'debitos'
@@ -2389,22 +2500,24 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex gap-8 flex-wrap">
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total lançamentos</p>
-            <p className="text-2xl font-black">{data.rows.length}</p>
+            <p className="text-2xl font-black">
+              {gruposSelecionados.reduce((total, g) => total + g.rows.length, 0)}
+            </p>
           </div>
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Categorias</p>
-            <p className="text-2xl font-black">{grupos.length}</p>
+            <p className="text-2xl font-black">{gruposSelecionados.length}</p>
           </div>
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total C (recebimentos)</p>
             <p className="text-2xl font-black text-emerald-600">
-              R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza === 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
+              R$ {fmt(gruposSelecionados.reduce((a, g) => a + g.totalCreditos, 0))}
             </p>
           </div>
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total D (pagamentos)</p>
             <p className="text-2xl font-black text-rose-600">
-              R$ {fmt(grupos.reduce((a, g) => a + g.rows.filter(r => r.natureza !== 'C').reduce((s, r) => s + parseFloat(r.valor), 0), 0))}
+              R$ {fmt(gruposSelecionados.reduce((a, g) => a + g.totalDebitos, 0))}
             </p>
           </div>
         </div>
