@@ -2012,6 +2012,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(today);
   const [categoriaId, setCategoriaId] = useState('');
+  const [visualizacao, setVisualizacao] = useState<'detalhado' | 'resumo' | 'debitos' | 'creditos'>('detalhado');
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2042,18 +2043,47 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       map.get(key)!.push(row);
     }
     return Array.from(map.entries()).map(([cat, rows]) => {
-      const total = rows.reduce((acc, r) => {
-        const v = parseFloat(r.valor);
-        return acc + (r.natureza === 'C' ? v : -v);
-      }, 0);
-      return { cat, rows, total };
+      const totalCreditos = rows.reduce(
+        (acc, r) => acc + (r.natureza === 'C' ? parseFloat(r.valor) : 0),
+        0
+      );
+      const totalDebitos = rows.reduce(
+        (acc, r) => acc + (r.natureza === 'D' ? parseFloat(r.valor) : 0),
+        0
+      );
+      return {
+        cat,
+        rows,
+        totalCreditos,
+        totalDebitos,
+        total: totalCreditos - totalDebitos
+      };
     });
   }, [data]);
+
+  const gruposResumo = React.useMemo(() => {
+    return grupos
+      .map(g => {
+        if (visualizacao === 'debitos') {
+          return { ...g, valorResumo: g.totalDebitos, naturezaResumo: 'D' as const };
+        }
+        if (visualizacao === 'creditos') {
+          return { ...g, valorResumo: g.totalCreditos, naturezaResumo: 'C' as const };
+        }
+        return {
+          ...g,
+          valorResumo: g.total,
+          naturezaResumo: (g.total >= 0 ? 'C' : 'D') as 'C' | 'D'
+        };
+      })
+      .filter(g => visualizacao === 'resumo' || g.valorResumo > 0)
+      .sort((a, b) => Math.abs(b.valorResumo) - Math.abs(a.valorResumo));
+  }, [grupos, visualizacao]);
 
   const imprimir = () => {
     if (!data || grupos.length === 0) return;
     let totalAcum = 0;
-    const secoes = grupos.map(g => {
+    const secoesDetalhadas = grupos.map(g => {
       totalAcum += g.rows.length;
       const linhas = g.rows.map(r => {
         const v = parseFloat(r.valor);
@@ -2088,6 +2118,55 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         </div>`;
     }).join('');
 
+    const tituloVisualizacao = {
+      detalhado: 'Detalhado por categoria',
+      resumo: 'Resumo por categoria',
+      debitos: 'Somente débitos por categoria',
+      creditos: 'Somente créditos por categoria'
+    }[visualizacao];
+
+    const linhasResumo = gruposResumo.map(g => {
+      const cor = g.naturezaResumo === 'C' ? '#16a34a' : '#dc2626';
+      const prefixo = visualizacao === 'resumo' && g.valorResumo < 0 ? '-' : '';
+      return `<tr style="border-bottom:1px solid #e5e5e5">
+        <td style="padding:8px 10px;font-weight:700;text-transform:uppercase">${g.cat}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:900;color:${cor};white-space:nowrap">
+          ${prefixo}R$ ${fmt(g.valorResumo)} ${g.naturezaResumo}
+        </td>
+      </tr>`;
+    }).join('');
+
+    const totalResumo = gruposResumo.reduce((acc, g) => acc + (
+      visualizacao === 'resumo' ? g.valorResumo : Math.abs(g.valorResumo)
+    ), 0);
+    const naturezaTotalResumo = visualizacao === 'debitos'
+      ? 'D'
+      : visualizacao === 'creditos'
+        ? 'C'
+        : totalResumo >= 0 ? 'C' : 'D';
+    const corTotalResumo = naturezaTotalResumo === 'C' ? '#16a34a' : '#dc2626';
+    const prefixoTotalResumo = visualizacao === 'resumo' && totalResumo < 0 ? '-' : '';
+
+    const secaoResumo = `
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f0;border-bottom:2px solid #333">
+            <th style="padding:8px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666">Categoria</th>
+            <th style="padding:8px 10px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666">Total</th>
+          </tr>
+        </thead>
+        <tbody>${linhasResumo}</tbody>
+        <tfoot>
+          <tr style="background:#f5f5f0;border-top:2px solid #333">
+            <td style="padding:10px;font-weight:900">TOTAL GERAL</td>
+            <td style="padding:10px;text-align:right;font-weight:900;color:${corTotalResumo}">
+              ${prefixoTotalResumo}R$ ${fmt(totalResumo)} ${naturezaTotalResumo}
+            </td>
+          </tr>
+        </tfoot>
+      </table>`;
+
+    const conteudo = visualizacao === 'detalhado' ? secoesDetalhadas : secaoResumo;
     const html = `<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
       <title>Movimentos por Categoria — ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)}</title>
@@ -2100,8 +2179,8 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       </style>
     </head><body>
       <h2>MOVIMENTOS POR CATEGORIA</h2>
-      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${data.rows.length} lançamentos &nbsp;·&nbsp; ${grupos.length} categorias</p>
-      ${secoes}
+      <p class="sub">${tituloVisualizacao} &nbsp;·&nbsp; Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${visualizacao === 'detalhado' ? grupos.length : gruposResumo.length} categorias</p>
+      ${conteudo}
     </body></html>`;
 
     const win = window.open('', '_blank');
@@ -2109,6 +2188,13 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
     win.document.write(html); win.document.close(); win.focus();
     setTimeout(() => win.print(), 400);
   };
+
+  const opcoesVisualizacao = [
+    { id: 'detalhado', label: 'Detalhado', description: 'Categorias e lançamentos' },
+    { id: 'resumo', label: 'Resumo', description: 'Saldo total por categoria' },
+    { id: 'debitos', label: 'Somente débitos', description: 'Despesas por categoria' },
+    { id: 'creditos', label: 'Somente créditos', description: 'Receitas por categoria' }
+  ] as const;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -2146,14 +2232,47 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         )}
       </div>
 
+      {/* Tipo de visualização */}
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4">
+        <p className="px-2 mb-3 text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70">
+          Visualização
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+          {opcoesVisualizacao.map(opcao => (
+            <button
+              key={opcao.id}
+              type="button"
+              onClick={() => setVisualizacao(opcao.id)}
+              aria-pressed={visualizacao === opcao.id}
+              className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+                visualizacao === opcao.id
+                  ? 'border-farm-green bg-farm-green text-farm-cream shadow-md dark:border-[#a1a17a] dark:bg-[#2a2a1c]'
+                  : 'border-farm-green/10 bg-farm-cream/30 text-farm-brown hover:border-farm-green/30 hover:bg-farm-cream dark:border-white/10 dark:bg-white/5 dark:text-[#e5e5d0] dark:hover:border-white/20 dark:hover:bg-white/10'
+              }`}
+            >
+              <span className="block text-sm font-bold">{opcao.label}</span>
+              <span className={`block mt-0.5 text-xs ${
+                visualizacao === opcao.id
+                  ? 'text-farm-cream/70'
+                  : 'text-farm-green/50 dark:text-[#e5e5d0]/55'
+              }`}>
+                {opcao.description}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
 
-      {data && grupos.length === 0 && (
+      {data && (
+        visualizacao === 'detalhado' ? grupos.length === 0 : gruposResumo.length === 0
+      ) && (
         <div className="bg-white dark:bg-[#1a1a11] rounded-3xl p-12 text-center text-farm-green/40 dark:text-[#e5e5d0]/50 italic">Nenhum lançamento encontrado no período.</div>
       )}
 
       {/* Grupos por categoria */}
-      {grupos.map((g, gi) => (
+      {visualizacao === 'detalhado' && grupos.map((g, gi) => (
         <div key={gi} className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
           <div className={`px-6 py-4 border-b-2 ${g.total >= 0 ? 'border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-900/20' : 'border-rose-200 dark:border-rose-900 bg-rose-50 dark:bg-rose-900/20'}`}>
             <div className="flex items-center justify-between">
@@ -2198,7 +2317,75 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         </div>
       ))}
 
-      {data && grupos.length > 0 && (
+      {/* Visualizações resumidas */}
+      {data && visualizacao !== 'detalhado' && gruposResumo.length > 0 && (
+        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+          <div className="px-6 py-5 border-b border-farm-green/10 dark:border-white/5">
+            <h3 className="font-serif text-xl font-bold dark:text-[#e5e5d0]">
+              {visualizacao === 'resumo' && 'Resumo por Categoria'}
+              {visualizacao === 'debitos' && 'Débitos por Categoria'}
+              {visualizacao === 'creditos' && 'Créditos por Categoria'}
+            </h3>
+            <p className="mt-1 text-xs text-farm-green/50 dark:text-[#e5e5d0]/60">
+              Período de {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}
+            </p>
+          </div>
+
+          <div className="divide-y divide-farm-green/5 dark:divide-white/5">
+            {gruposResumo.map(g => {
+              const isCredito = g.naturezaResumo === 'C';
+              const prefixo = visualizacao === 'resumo' && g.valorResumo < 0 ? '- ' : '';
+              return (
+                <div
+                  key={g.cat}
+                  className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-farm-cream/30 dark:hover:bg-white/5 transition-colors"
+                >
+                  <span className="text-sm font-bold uppercase text-farm-brown dark:text-[#e5e5d0]">
+                    {g.cat}
+                  </span>
+                  <span className={`shrink-0 text-base font-black ${
+                    isCredito
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}>
+                    {prefixo}R$ {fmt(g.valorResumo)}
+                    <span className="ml-2 text-xs">{g.naturezaResumo}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between gap-4 px-6 py-5 bg-farm-cream/40 dark:bg-white/5 border-t-2 border-farm-green/10 dark:border-white/10">
+            <span className="text-sm font-black uppercase tracking-wide text-farm-brown dark:text-[#e5e5d0]">
+              Total geral
+            </span>
+            {(() => {
+              const total = gruposResumo.reduce((acc, g) => acc + (
+                visualizacao === 'resumo' ? g.valorResumo : Math.abs(g.valorResumo)
+              ), 0);
+              const natureza = visualizacao === 'debitos'
+                ? 'D'
+                : visualizacao === 'creditos'
+                  ? 'C'
+                  : total >= 0 ? 'C' : 'D';
+              const prefixo = visualizacao === 'resumo' && total < 0 ? '- ' : '';
+              return (
+                <span className={`text-lg font-black ${
+                  natureza === 'C'
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400'
+                }`}>
+                  {prefixo}R$ {fmt(total)}
+                  <span className="ml-2 text-xs">{natureza}</span>
+                </span>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {data && visualizacao === 'detalhado' && grupos.length > 0 && (
         <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex gap-8 flex-wrap">
           <div>
             <p className="text-xs font-bold uppercase text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total lançamentos</p>
