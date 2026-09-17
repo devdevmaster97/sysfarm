@@ -1613,15 +1613,102 @@ function pdfFileFromDoc(doc: jsPDF, filename: string, title: string): PreparedPd
 }
 
 function downloadPreparedPdf(prepared: PreparedPdf) {
-  const blob = new Blob([prepared.bytes], { type: 'application/pdf' });
+  const blob = new Blob([prepared.bytes], { type: 'application/octet-stream' });
+  const filename = prepared.filename.endsWith('.pdf') ? prepared.filename : `${prepared.filename}.pdf`;
+
+  const picker = (window as any).showSaveFilePicker as ((options: unknown) => Promise<any>) | undefined;
+  if (typeof picker === 'function') {
+    picker({
+      suggestedName: filename,
+      types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }]
+    }).then(async (handle: any) => {
+      const writable = await handle.createWritable();
+      await writable.write(new Blob([prepared.bytes], { type: 'application/pdf' }));
+      await writable.close();
+    }).catch((err: any) => {
+      if (err?.name !== 'AbortError') triggerAnchorDownload(blob, filename);
+    });
+    return;
+  }
+
+  triggerAnchorDownload(blob, filename);
+}
+
+function triggerAnchorDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = prepared.filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 4000);
+}
+
+function printHtml(html: string) {
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  const win = iframe.contentWindow;
+  if (!doc || !win) {
+    iframe.remove();
+    return;
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => setTimeout(() => iframe.remove(), 800);
+  win.addEventListener('afterprint', cleanup);
+  setTimeout(() => {
+    win.focus();
+    win.print();
+  }, 400);
+}
+
+function DownloadPdfButton({
+  pdfRef,
+  ready,
+  disabled,
+  onError
+}: {
+  pdfRef: React.RefObject<PreparedPdf | null>;
+  ready: boolean;
+  disabled?: boolean;
+  onError: (message: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled || !ready}
+      title="Baixar PDF"
+      onClick={() => {
+        const prepared = pdfRef.current;
+        if (!prepared) {
+          onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
+          return;
+        }
+        downloadPreparedPdf(prepared);
+      }}
+      className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      <Download size={18} />
+      {ready ? 'Baixar PDF' : 'Preparando PDF...'}
+    </button>
+  );
 }
 
 function ShareReportButton({
@@ -2160,12 +2247,7 @@ function FechamentoCaixa() {
       </table>
     </body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); }, 400);
+    printHtml(html);
   };
 
   return (
@@ -2217,6 +2299,7 @@ function FechamentoCaixa() {
               <Printer size={18} />
               Imprimir
             </button>
+            <DownloadPdfButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
             <ShareReportButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
           </>
         )}
@@ -2414,10 +2497,7 @@ function MovimentosPeriodo() {
       </table>
     </body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(html); win.document.close(); win.focus();
-    setTimeout(() => win.print(), 400);
+    printHtml(html);
   };
 
   // Calcula saldo acumulado para a tela
@@ -2468,6 +2548,7 @@ function MovimentosPeriodo() {
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
               <Printer size={18} />Imprimir
             </button>
+            <DownloadPdfButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
             <ShareReportButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
           </>
         )}
@@ -2809,10 +2890,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       ${conteudo}
     </body></html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(html); win.document.close(); win.focus();
-    setTimeout(() => win.print(), 400);
+    printHtml(html);
   };
 
   const opcoesVisualizacao = [
@@ -2931,6 +3009,12 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             >
               <Printer size={18} />Imprimir
             </button>
+            <DownloadPdfButton
+              pdfRef={pdfRef}
+              ready={pdfReady}
+              disabled={totalCategoriasVisiveisSelecionadas === 0}
+              onError={setError}
+            />
             <ShareReportButton
               pdfRef={pdfRef}
               ready={pdfReady}
