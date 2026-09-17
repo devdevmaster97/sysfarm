@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SysFarm · Teste de compartilhamento</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#f5f5f0;color:#2a2a1c}
+  h1{font-size:18px;margin:0 0 4px}
+  p{font-size:13px;color:#666;margin:0 0 16px}
+  button{display:block;width:100%;padding:14px;margin:8px 0;border:0;border-radius:12px;background:#5a5a40;color:#fff;font-size:15px;font-weight:700}
+  button:disabled{opacity:.5}
+  #log{background:#fff;border-radius:12px;padding:12px;font:12px/1.5 monospace;white-space:pre-wrap;word-break:break-word;margin-top:16px}
+  .ok{color:#15803d}.err{color:#b91c1c}
+</style>
+</head>
+<body>
+<h1>Teste de compartilhamento</h1>
+<p>Toque em cada botão e veja o resultado abaixo. Depois me envie o texto do quadro (toque em "Copiar resultado").</p>
+
+<button data-t="texto">1 · Só texto</button>
+<button data-t="txt">2 · Arquivo .txt</button>
+<button data-t="png">3 · Arquivo .png</button>
+<button data-t="pdf">4 · Arquivo .pdf mínimo</button>
+<button data-t="pdf-title">5 · .pdf + título</button>
+<button data-t="pdf-nome-longo">6 · .pdf nome longo (igual ao relatório)</button>
+<button data-t="pdf-blob">7 · .pdf via Blob</button>
+<button id="copy" style="background:#8a6d3b">Copiar resultado</button>
+
+<div id="log"></div>
+
+<script>
+const log = document.getElementById('log');
+const lines = [];
+function write(msg, cls){ lines.push(msg); const d=document.createElement('div'); if(cls) d.className=cls; d.textContent=msg; log.appendChild(d); }
+
+write('UA: ' + navigator.userAgent);
+write('share: ' + (typeof navigator.share) + ' · canShare: ' + (typeof navigator.canShare) + ' · secure: ' + window.isSecureContext + ' · standalone: ' + matchMedia('(display-mode: standalone)').matches);
+
+const PDF_MIN = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
+function pdfBytes(){ const b=new Uint8Array(PDF_MIN.length); for(let i=0;i<b.length;i++) b[i]=PDF_MIN.charCodeAt(i); return b; }
+
+function pngFile(){
+  const c=document.createElement('canvas'); c.width=c.height=8;
+  const ctx=c.getContext('2d'); ctx.fillStyle='#5a5a40'; ctx.fillRect(0,0,8,8);
+  const dataUrl=c.toDataURL('image/png');
+  const bin=atob(dataUrl.split(',')[1]); const b=new Uint8Array(bin.length);
+  for(let i=0;i<b.length;i++) b[i]=bin.charCodeAt(i);
+  return new File([b],'teste.png',{type:'image/png'});
+}
+
+function buildData(t){
+  switch(t){
+    case 'texto': return { title:'SysFarm', text:'Teste de compartilhamento SysFarm' };
+    case 'txt': return { files:[new File(['teste sysfarm'],'teste.txt',{type:'text/plain'})] };
+    case 'png': return { files:[pngFile()] };
+    case 'pdf': return { files:[new File([pdfBytes()],'teste.pdf',{type:'application/pdf'})] };
+    case 'pdf-title': return { title:'Relatório', files:[new File([pdfBytes()],'teste.pdf',{type:'application/pdf'})] };
+    case 'pdf-nome-longo': return { files:[new File([pdfBytes()],'movimentos-categoria-debitos-2026-09-01',{type:'application/pdf'})] };
+    case 'pdf-blob': return { files:[new File([new Blob([pdfBytes()],{type:'application/pdf'})],'teste.pdf',{type:'application/pdf'})] };
+  }
+}
+
+document.querySelectorAll('button[data-t]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const t=btn.dataset.t;
+    let data;
+    try { data=buildData(t); } catch(e){ write(t+' → ERRO ao montar: '+e, 'err'); return; }
+    let can='?';
+    try { can = typeof navigator.canShare==='function' ? String(navigator.canShare(data)) : 'n/a'; } catch(e){ can='exc '+e; }
+    if (typeof navigator.share!=='function'){ write(t+' → navigator.share indisponível', 'err'); return; }
+    let p;
+    try { p = navigator.share(data); } catch(e){ write(t+' → THROW '+(e&&e.name)+': '+(e&&e.message)+' (canShare='+can+')', 'err'); return; }
+    p.then(()=>write(t+' → OK (canShare='+can+')','ok'))
+     .catch(e=>write(t+' → '+(e&&e.name)+': '+(e&&e.message)+' (canShare='+can+')', (e&&e.name==='AbortError')?'':'err'));
+  });
+});
+
+document.getElementById('copy').addEventListener('click',async()=>{
+  try { await navigator.clipboard.writeText(lines.join('\n')); write('(copiado)'); } catch(e){ write('(não consegui copiar: '+e+')'); }
+});
+</script>
+</body>
+</html>

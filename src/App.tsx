@@ -2070,6 +2070,21 @@ function buildCategoriaPdf(params: {
   );
 }
 
+// No celular, depois de gerar o relatório, rola a tela até os botões de
+// Imprimir / Baixar PDF / Compartilhar, que ficam abaixo do botão Gerar.
+function useScrollToReportActions(data: unknown) {
+  const actionsRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    if (!window.matchMedia('(max-width: 639px)').matches) return;
+    const id = window.setTimeout(() => {
+      actionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [data]);
+  return actionsRef;
+}
+
 const MESES_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -2226,6 +2241,7 @@ function FechamentoCaixa() {
   const [error, setError] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
   const pdfRef = useRef<PreparedPdf | null>(null);
+  const actionsRef = useScrollToReportActions(data);
 
   useEffect(() => {
     if (!data) {
@@ -2382,8 +2398,9 @@ function FechamentoCaixa() {
         {data && (
           <>
             <button
+              ref={actionsRef}
               onClick={imprimir}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+              className="scroll-mt-20 w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
             >
               <Printer size={18} />
               Imprimir
@@ -2481,6 +2498,7 @@ function MovimentosPeriodo() {
   const [error, setError] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
   const pdfRef = useRef<PreparedPdf | null>(null);
+  const actionsRef = useScrollToReportActions(data);
 
   useEffect(() => {
     if (!data) {
@@ -2633,8 +2651,8 @@ function MovimentosPeriodo() {
         </button>
         {data && (
           <>
-            <button onClick={imprimir}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
+            <button ref={actionsRef} onClick={imprimir}
+              className="scroll-mt-20 w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
               <Printer size={18} />Imprimir
             </button>
             <DownloadPdfButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
@@ -2732,6 +2750,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   const [error, setError] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
   const pdfRef = useRef<PreparedPdf | null>(null);
+  const actionsRef = useScrollToReportActions(data);
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
@@ -3091,10 +3110,11 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         {data && (
           <>
             <button
+              ref={actionsRef}
               onClick={imprimir}
               disabled={totalCategoriasVisiveisSelecionadas === 0}
               title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Imprimir categorias selecionadas'}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="scroll-mt-20 w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Printer size={18} />Imprimir
             </button>
