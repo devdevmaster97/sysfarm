@@ -1603,30 +1603,40 @@ const addPdfPageNumbers = (doc: jsPDF) => {
   }
 };
 
+function downloadPdfBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 async function sharePdfDocument(doc: jsPDF, filename: string, title: string) {
   addPdfPageNumbers(doc);
-  const blob = doc.output('blob');
-  const file = new File([blob], filename, { type: 'application/pdf' });
-  const shareData = {
-    title,
-    text: title,
-    files: [file]
-  };
+  const blob = new Blob([doc.bytes()], { type: 'application/pdf' });
+  const file = new File([blob], filename, { type: 'application/pdf', lastModified: Date.now() });
 
-  try {
-    const canShareFiles = typeof navigator.canShare === 'function'
-      ? navigator.canShare({ files: [file] })
-      : false;
-    if (navigator.share && canShareFiles) {
-      await navigator.share(shareData);
-      return 'shared' as const;
-    }
-  } catch (err: any) {
-    if (err?.name === 'AbortError') throw err;
+  if (typeof navigator.share !== 'function') {
+    downloadPdfBlob(blob, filename);
+    return 'downloaded' as const;
   }
 
-  doc.save(filename);
-  return 'downloaded' as const;
+  const withFile = { files: [file] };
+  const withMeta = { files: [file], title, text: title };
+  let payload: ShareData = withFile;
+  try {
+    if (typeof navigator.canShare === 'function' && navigator.canShare(withMeta)) {
+      payload = withMeta;
+    }
+  } catch {
+    payload = withFile;
+  }
+
+  await navigator.share(payload);
+  return 'shared' as const;
 }
 
 function ReportsHub({ categories }: { categories: Category[] }) {
@@ -1772,7 +1782,6 @@ function FechamentoCaixa() {
 
   const compartilhar = async () => {
     if (!data) return;
-    setSharing(true);
     setError('');
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -1814,13 +1823,20 @@ function FechamentoCaixa() {
         },
         margin: { left: 14, right: 14, bottom: 14 }
       });
-      await sharePdfDocument(
+      const sharePromise = sharePdfDocument(
         doc,
         `fechamento-caixa-${data.dataFim}.pdf`,
         'Fechamento do Caixa'
       );
+      setSharing(true);
+      await sharePromise;
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
+      if (err?.name === 'AbortError') return;
+      if (err?.name === 'NotAllowedError') {
+        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
+      } else {
+        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
+      }
     } finally {
       setSharing(false);
     }
@@ -1859,12 +1875,13 @@ function FechamentoCaixa() {
               Imprimir
             </button>
             <button
+              type="button"
               onClick={compartilhar}
               disabled={sharing}
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
+              {sharing ? 'Abrindo...' : 'Compartilhar'}
             </button>
           </>
         )}
@@ -2043,7 +2060,6 @@ function MovimentosPeriodo() {
 
   const compartilhar = async () => {
     if (!data) return;
-    setSharing(true);
     setError('');
     try {
       let saldo = 0;
@@ -2102,13 +2118,20 @@ function MovimentosPeriodo() {
         },
         margin: { left: 10, right: 10, bottom: 14 }
       });
-      await sharePdfDocument(
+      const sharePromise = sharePdfDocument(
         doc,
         `movimentos-${data.dataInicio}-a-${data.dataFim}.pdf`,
         'Movimentos por Data'
       );
+      setSharing(true);
+      await sharePromise;
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
+      if (err?.name === 'AbortError') return;
+      if (err?.name === 'NotAllowedError') {
+        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
+      } else {
+        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
+      }
     } finally {
       setSharing(false);
     }
@@ -2149,12 +2172,13 @@ function MovimentosPeriodo() {
               <Printer size={18} />Imprimir
             </button>
             <button
+              type="button"
               onClick={compartilhar}
               disabled={sharing}
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
+              {sharing ? 'Abrindo...' : 'Compartilhar'}
             </button>
           </>
         )}
@@ -2476,7 +2500,6 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       : gruposResumoSelecionados;
     if (!data || gruposParaPdf.length === 0) return;
 
-    setSharing(true);
     setError('');
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -2567,13 +2590,20 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         });
       }
 
-      await sharePdfDocument(
+      const sharePromise = sharePdfDocument(
         doc,
         `movimentos-categoria-${visualizacao}-${data.dataInicio}-a-${data.dataFim}.pdf`,
         'Movimentos por Categoria'
       );
+      setSharing(true);
+      await sharePromise;
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
+      if (err?.name === 'AbortError') return;
+      if (err?.name === 'NotAllowedError') {
+        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
+      } else {
+        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
+      }
     } finally {
       setSharing(false);
     }
@@ -2682,13 +2712,14 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
               <Printer size={18} />Imprimir
             </button>
             <button
+              type="button"
               onClick={compartilhar}
               disabled={sharing || totalCategoriasVisiveisSelecionadas === 0}
               title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Gerar e compartilhar PDF'}
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
+              {sharing ? 'Abrindo...' : 'Compartilhar'}
             </button>
           </>
         )}

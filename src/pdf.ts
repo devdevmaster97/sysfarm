@@ -125,14 +125,18 @@ export default class jsPDF {
     return this.pages.length;
   }
 
-  output(type: 'blob') {
-    if (type !== 'blob') throw new Error('Formato de saída não suportado');
+  bytes() {
     const pdf = this.buildPdf();
     const bytes = new Uint8Array(pdf.length);
     for (let i = 0; i < pdf.length; i += 1) {
       bytes[i] = pdf.charCodeAt(i) & 0xff;
     }
-    return new Blob([bytes], { type: 'application/pdf' });
+    return bytes;
+  }
+
+  output(type: 'blob') {
+    if (type !== 'blob') throw new Error('Formato de saída não suportado');
+    return new Blob([this.bytes()], { type: 'application/pdf' });
   }
 
   save(filename: string) {
