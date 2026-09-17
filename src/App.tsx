@@ -2251,44 +2251,6 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      {/* Filtros */}
-      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
-          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
-        </div>
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
-          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
-        </div>
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Categoria</label>
-          <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
-            <option value="">Todas as categorias</option>
-            {categories.map(c => (
-              <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
-            ))}
-          </select>
-        </div>
-        <button onClick={buscar} disabled={loading}
-          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
-          <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
-        </button>
-        {data && (
-          <button
-            onClick={imprimir}
-            disabled={totalCategoriasVisiveisSelecionadas === 0}
-            title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Imprimir categorias selecionadas'}
-            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Printer size={18} />Imprimir
-          </button>
-        )}
-      </div>
-
       {/* Tipo de visualização */}
       <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4">
         <p className="px-2 mb-3 text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70">
@@ -2343,6 +2305,44 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
               </button>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Filtros */}
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
+          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
+          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Categoria</label>
+          <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
+            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
+            <option value="">Todas as categorias</option>
+            {categories.map(c => (
+              <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
+            ))}
+          </select>
+        </div>
+        <button onClick={buscar} disabled={loading}
+          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+          <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
+        </button>
+        {data && (
+          <button
+            onClick={imprimir}
+            disabled={totalCategoriasVisiveisSelecionadas === 0}
+            title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Imprimir categorias selecionadas'}
+            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Printer size={18} />Imprimir
+          </button>
         )}
       </div>
 
