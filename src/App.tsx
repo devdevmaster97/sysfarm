@@ -1723,37 +1723,37 @@ function ShareReportButton({
   title?: string;
   onError: (message: string) => void;
 }) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const shareOnClick = () => {
+    const prepared = pdfRef.current;
+    if (!prepared || typeof navigator.share !== 'function') return;
 
-  useEffect(() => {
-    const button = buttonRef.current;
-    if (!button) return;
+    const blob = new Blob([prepared.bytes], { type: 'application/pdf' });
+    const file = new File([blob], prepared.filename, {
+      type: 'application/pdf',
+      lastModified: Date.now()
+    });
 
-    const handleClick = () => {
-      if (button.disabled) return;
-      const prepared = pdfRef.current;
-      if (!prepared || typeof navigator.share !== 'function') return;
+    const withFile = { files: [file], title: prepared.title, text: prepared.title };
+    const textOnly = { title: prepared.title, text: prepared.title };
 
-      const file = new File([prepared.bytes], prepared.filename, {
-        type: 'application/pdf',
-        lastModified: Date.now()
-      });
-      navigator.share({ files: [file] }).catch((err: any) => {
+    try {
+      navigator.share(withFile).catch((err: any) => {
         if (err?.name === 'AbortError') return;
       });
-    };
-
-    button.addEventListener('click', handleClick);
-    return () => button.removeEventListener('click', handleClick);
-  }, [ready, disabled, pdfRef]);
+    } catch {
+      navigator.share(textOnly).catch((err: any) => {
+        if (err?.name === 'AbortError') return;
+      });
+    }
+  };
 
   return (
     <button
-      ref={buttonRef}
       type="button"
       disabled={disabled || !ready}
       title={title}
-      className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      onClick={shareOnClick}
+      className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 touch-manipulation"
     >
       <Share size={18} />
       {ready ? 'Compartilhar' : 'Preparando PDF...'}
