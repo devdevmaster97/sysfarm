@@ -1619,31 +1619,65 @@ function pdfFileFromDoc(doc: jsPDF, filename: string, title: string): PreparedPd
 }
 
 function sharePdfFilename(name: string) {
-  const base = name.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40);
+  const base = name
+    .replace(/\.pdf$/i, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .slice(0, 40)
+    .replace(/[-_]+$/g, '');
   return `${base || 'relatorio'}.pdf`;
 }
 
-function asNativeFile(file: File) {
+// Monta o mesmo PDF de formas diferentes: alguns navegadores (Android) só
+// aceitam anexar um File criado de um jeito específico.
+function pdfShareCandidates(prepared: PreparedPdf): File[] {
+  const filename = sharePdfFilename(prepared.filename);
+  const candidates: File[] = [];
+
   try {
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    const nativeFile = transfer.files[0];
-    if (nativeFile && nativeFile.size > 0) return nativeFile;
+    const bytes = copyPdfBytes(prepared.bytes);
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    candidates.push(new File([buffer], filename, { type: 'application/pdf', lastModified: Date.now() }));
   } catch {
-    // DataTransfer is unavailable on some WebViews
+    // ignora e tenta a próxima forma
   }
-  return file;
+
+  try {
+    const blob = new Blob([copyPdfBytes(prepared.bytes)], { type: 'application/pdf' });
+    candidates.push(new File([blob], filename, { type: 'application/pdf', lastModified: Date.now() }));
+  } catch {
+    // ignora e tenta a próxima forma
+  }
+
+  try {
+    if (candidates[0]) {
+      const transfer = new DataTransfer();
+      transfer.items.add(candidates[0]);
+      const nativeFile = transfer.files[0];
+      if (nativeFile) candidates.push(nativeFile);
+    }
+  } catch {
+    // DataTransfer não existe em alguns WebViews
+  }
+
+  return candidates.filter(file => file.size > 0);
 }
 
-function pdfFileForShare(prepared: PreparedPdf) {
-  const filename = sharePdfFilename(prepared.filename);
-  const bytes = copyPdfBytes(prepared.bytes);
-  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  const file = new File([buffer], filename, {
-    type: 'application/pdf',
-    lastModified: Date.now()
-  });
-  return asNativeFile(file);
+function pickShareableFile(files: File[]): { file: File | null; checked: boolean } {
+  if (typeof navigator.canShare !== 'function') return { file: files[0] ?? null, checked: false };
+  for (const file of files) {
+    try {
+      if (navigator.canShare({ files: [file] })) return { file, checked: true };
+    } catch {
+      // continua tentando
+    }
+  }
+  return { file: null, checked: true };
+}
+
+function describeShareError(err: any) {
+  const name = String(err?.name || 'Erro');
+  const message = String(err?.message || (typeof err === 'string' ? err : '')).trim().slice(0, 160);
+  return message ? `${name}: ${message}` : name;
 }
 
 function downloadPreparedPdf(prepared: PreparedPdf) {
@@ -1770,31 +1804,50 @@ function ShareReportButton({
     onError('');
 
     if (typeof navigator.share !== 'function') {
-      onError('Abra o SysFarm no Chrome ou no Safari para usar a tela de compartilhamento do celular.');
+      onError('Este navegador não tem a tela de compartilhamento do celular. Abra o SysFarm no Chrome (Android) ou no Safari (iPhone).');
       return;
     }
 
-    const file = pdfFileForShare(prepared);
-    if (!file.size) {
+    const candidates = pdfShareCandidates(prepared);
+    const picked = pickShareableFile(candidates);
+    const file = picked.file ?? candidates[0] ?? null;
+    if (!file) {
       onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
       return;
     }
 
-    const data: ShareData = { files: [file] };
+    const data: ShareData = { files: [file], title: prepared.title };
     sharing.current = true;
     const finish = () => { sharing.current = false; };
 
+    // Se o celular recusar o anexo, salva o PDF no aparelho e explica o motivo
+    // real, para o usuário conseguir compartilhar pelo arquivo mesmo assim.
+    const fallback = (detail: string) => {
+      const reason = picked.file ? detail : `${detail} · o navegador recusou o tipo de arquivo (canShare=false)`;
+      try {
+        downloadPreparedPdf(prepared);
+      } catch {
+        // download é apenas o plano B
+      }
+      onError(`Não foi possível anexar o PDF na tela de compartilhamento (${reason}). O PDF foi salvo em Downloads — compartilhe o arquivo por lá.`);
+    };
+
+    let promise: Promise<void>;
     try {
-      navigator.share(data).then(finish).catch((err: any) => {
-        finish();
-        if (err?.name === 'AbortError') return;
-        if (/cancel|abort/i.test(String(err?.message || ''))) return;
-        onError('Não foi possível anexar o PDF na tela de compartilhamento. Tente de novo pelo Chrome ou Safari.');
-      });
-    } catch {
+      // navigator.share precisa ser chamado direto no toque (sem await antes)
+      promise = navigator.share(data);
+    } catch (err: any) {
       finish();
-      onError('Não foi possível anexar o PDF na tela de compartilhamento. Tente de novo pelo Chrome ou Safari.');
+      fallback(describeShareError(err));
+      return;
     }
+
+    promise.then(finish).catch((err: any) => {
+      finish();
+      if (err?.name === 'AbortError') return;
+      if (/cancel|abort/i.test(String(err?.message || ''))) return;
+      fallback(describeShareError(err));
+    });
 
     setTimeout(finish, 2000);
   };
