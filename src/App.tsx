@@ -1576,10 +1576,24 @@ function ReportsHub({ categories }: { categories: Category[] }) {
   ] as const;
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-3">
+      <div
+        role="tablist"
+        aria-label="Tipos de relatório"
+        className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-3xl bg-white dark:bg-[#1a1a11] border border-farm-green/5 dark:border-white/5 p-2 shadow-sm"
+      >
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setSelected(t.id)}
-            className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${selected === t.id ? 'bg-farm-green text-farm-cream shadow-md' : 'bg-white text-farm-green border-2 border-farm-green/20 hover:bg-farm-cream'}`}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={selected === t.id}
+            onClick={() => setSelected(t.id)}
+            className={`w-full min-h-12 px-3 py-3 rounded-2xl font-bold text-sm leading-tight text-center transition-all ${
+              selected === t.id
+                ? 'bg-farm-green text-farm-cream shadow-md dark:bg-[#2a2a1c] dark:ring-1 dark:ring-[#a1a17a]/60'
+                : 'text-farm-green dark:text-[#e5e5d0]/75 hover:bg-farm-cream dark:hover:bg-white/5'
+            }`}
+          >
             {t.label}
           </button>
         ))}
@@ -1696,8 +1710,8 @@ function FechamentoCaixa() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
-      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
-        <div>
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
+        <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
             Saldo acumulado até a data
           </label>
@@ -1705,13 +1719,13 @@ function FechamentoCaixa() {
             type="date"
             value={dataFim}
             onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
           />
         </div>
         <button
           onClick={buscar}
           disabled={loading}
-          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2"
+          className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
         >
           <FileText size={18} />
           {loading ? 'Calculando...' : 'Gerar Relatório'}
@@ -1719,7 +1733,7 @@ function FechamentoCaixa() {
         {data && (
           <button
             onClick={imprimir}
-            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2"
+            className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
           >
             <Printer size={18} />
             Imprimir
@@ -1910,24 +1924,24 @@ function MovimentosPeriodo() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
-      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
-        <div>
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
+        <div className="w-full sm:flex-1 lg:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
-        <div>
+        <div className="w-full sm:flex-1 lg:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
         <button onClick={buscar} disabled={loading}
-          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+          className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2">
           <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
         </button>
         {data && (
           <button onClick={imprimir}
-            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green rounded-xl font-bold hover:bg-farm-cream transition-colors flex items-center gap-2">
+            className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
             <Printer size={18} />Imprimir
           </button>
         )}
@@ -2252,18 +2266,18 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Tipo de visualização */}
-      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4">
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-3 sm:p-4">
         <p className="px-2 mb-3 text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70">
           Visualização
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
           {opcoesVisualizacao.map(opcao => (
             <button
               key={opcao.id}
               type="button"
               onClick={() => setVisualizacao(opcao.id)}
               aria-pressed={visualizacao === opcao.id}
-              className={`rounded-2xl border-2 px-4 py-3 text-left transition-all ${
+              className={`min-h-[84px] rounded-2xl border-2 px-3 sm:px-4 py-3 text-left transition-all ${
                 visualizacao === opcao.id
                   ? 'border-farm-green bg-farm-green text-farm-cream shadow-md dark:border-[#a1a17a] dark:bg-[#2a2a1c]'
                   : 'border-farm-green/10 bg-farm-cream/30 text-farm-brown hover:border-farm-green/30 hover:bg-farm-cream dark:border-white/10 dark:bg-white/5 dark:text-[#e5e5d0] dark:hover:border-white/20 dark:hover:bg-white/10'
@@ -2282,16 +2296,16 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         </div>
 
         {data && categoriasVisiveis.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-2 pt-4 mt-4 border-t border-farm-green/10 dark:border-white/10">
-            <span className="text-xs font-medium text-farm-green/60 dark:text-[#e5e5d0]/70">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-2 pt-4 mt-4 border-t border-farm-green/10 dark:border-white/10">
+            <span className="text-xs font-medium text-center sm:text-left text-farm-green/60 dark:text-[#e5e5d0]/70">
               {totalCategoriasVisiveisSelecionadas} de {categoriasVisiveis.length} categorias selecionadas para impressão
             </span>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 sm:flex gap-2">
               <button
                 type="button"
                 onClick={marcarCategoriasVisiveis}
                 disabled={totalCategoriasVisiveisSelecionadas === categoriasVisiveis.length}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-farm-green dark:text-[#e5e5d0] hover:bg-farm-cream dark:hover:bg-white/10 disabled:opacity-40 transition-colors"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg text-xs font-bold text-farm-green dark:text-[#e5e5d0] hover:bg-farm-cream dark:hover:bg-white/10 disabled:opacity-40 transition-colors"
               >
                 Marcar todas
               </button>
@@ -2299,7 +2313,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
                 type="button"
                 onClick={desmarcarCategoriasVisiveis}
                 disabled={totalCategoriasVisiveisSelecionadas === 0}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-40 transition-colors"
+                className="w-full sm:w-auto px-3 py-2 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-40 transition-colors"
               >
                 Desmarcar todas
               </button>
@@ -2309,21 +2323,21 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-wrap gap-4 items-end">
-        <div>
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
+        <div className="w-full sm:flex-1 xl:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
           <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
-        <div>
+        <div className="w-full sm:flex-1 xl:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
           <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
         </div>
-        <div>
+        <div className="w-full sm:flex-[2] xl:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Categoria</label>
           <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
-            className="px-4 py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
+            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium xl:min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
             <option value="">Todas as categorias</option>
             {categories.map(c => (
               <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
@@ -2331,7 +2345,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
           </select>
         </div>
         <button onClick={buscar} disabled={loading}
-          className="px-6 py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center gap-2">
+          className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2">
           <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
         </button>
         {data && (
@@ -2339,7 +2353,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             onClick={imprimir}
             disabled={totalCategoriasVisiveisSelecionadas === 0}
             title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Imprimir categorias selecionadas'}
-            className="px-6 py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Printer size={18} />Imprimir
           </button>
