@@ -1715,7 +1715,8 @@ function ShareReportButton({
   pdfRef,
   ready,
   disabled,
-  title
+  title,
+  onError
 }: {
   pdfRef: React.RefObject<PreparedPdf | null>;
   ready: boolean;
@@ -1725,26 +1726,34 @@ function ShareReportButton({
 }) {
   const shareOnClick = () => {
     const prepared = pdfRef.current;
-    if (!prepared || typeof navigator.share !== 'function') return;
+    if (!prepared) {
+      onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
+      return;
+    }
 
-    const blob = new Blob([prepared.bytes], { type: 'application/pdf' });
-    const file = new File([blob], prepared.filename, {
-      type: 'application/pdf',
-      lastModified: Date.now()
-    });
+    if (typeof navigator.share !== 'function') {
+      onError('Este celular não abriu a tela de compartilhamento. Use o Chrome ou o Safari neste site.');
+      return;
+    }
 
-    const withFile = { files: [file], title: prepared.title, text: prepared.title };
-    const textOnly = { title: prepared.title, text: prepared.title };
+    const file = prepared.file;
+    let data: ShareData = {
+      title: prepared.title,
+      text: prepared.title
+    };
 
     try {
-      navigator.share(withFile).catch((err: any) => {
-        if (err?.name === 'AbortError') return;
-      });
+      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        data = { files: [file] };
+      }
     } catch {
-      navigator.share(textOnly).catch((err: any) => {
-        if (err?.name === 'AbortError') return;
-      });
+      data = { title: prepared.title, text: prepared.title };
     }
+
+    navigator.share(data).catch((err: any) => {
+      if (err?.name === 'AbortError') return;
+      onError('Não foi possível abrir a tela de compartilhamento do celular.');
+    });
   };
 
   return (
