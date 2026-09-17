@@ -1724,36 +1724,38 @@ function ShareReportButton({
   title?: string;
   onError: (message: string) => void;
 }) {
-  const shareOnClick = () => {
+  const sharing = useRef(false);
+
+  const shareNow = () => {
+    if (sharing.current) return;
     const prepared = pdfRef.current;
     if (!prepared) {
       onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
       return;
     }
+    onError('');
 
     if (typeof navigator.share !== 'function') {
-      onError('Este celular não abriu a tela de compartilhamento. Use o Chrome ou o Safari neste site.');
+      onError('Abra o SysFarm no Chrome ou no Safari para usar a tela de compartilhamento do celular.');
       return;
     }
 
-    const file = prepared.file;
-    let data: ShareData = {
-      title: prepared.title,
-      text: prepared.title
-    };
+    sharing.current = true;
 
+    const finish = () => { sharing.current = false; };
     try {
-      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-        data = { files: [file] };
-      }
+      navigator.share({
+        title: prepared.title,
+        url: window.location.href
+      }).then(finish).catch((err: any) => {
+        finish();
+        if (err?.name === 'AbortError') return;
+      });
     } catch {
-      data = { title: prepared.title, text: prepared.title };
+      finish();
     }
 
-    navigator.share(data).catch((err: any) => {
-      if (err?.name === 'AbortError') return;
-      onError('Não foi possível abrir a tela de compartilhamento do celular.');
-    });
+    setTimeout(finish, 2000);
   };
 
   return (
@@ -1761,7 +1763,7 @@ function ShareReportButton({
       type="button"
       disabled={disabled || !ready}
       title={title}
-      onClick={shareOnClick}
+      onClick={shareNow}
       className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 touch-manipulation"
     >
       <Share size={18} />
