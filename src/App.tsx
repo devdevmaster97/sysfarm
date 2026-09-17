@@ -1897,6 +1897,112 @@ function buildCategoriaPdf(params: {
   );
 }
 
+const MESES_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+const DATE_FIELD_CLASS =
+  'w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0] min-h-12 sm:min-h-0';
+
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+function monthBounds(year: number, month: number) {
+  const last = new Date(year, month, 0).getDate();
+  return {
+    dataInicio: `${year}-${pad2(month)}-01`,
+    dataFim: `${year}-${pad2(month)}-${pad2(last)}`,
+    lastDay: last
+  };
+}
+
+function yearOptions() {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let year = current + 1; year >= current - 10; year -= 1) years.push(year);
+  return years;
+}
+
+function DateModeSwitch({
+  mode,
+  onChange,
+  periodLabel = 'Por período',
+  monthLabel = 'Por mês'
+}: {
+  mode: 'periodo' | 'mes';
+  onChange: (mode: 'periodo' | 'mes') => void;
+  periodLabel?: string;
+  monthLabel?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Tipo de data"
+      className="w-full grid grid-cols-2 gap-1 p-1 rounded-2xl bg-farm-cream/50 dark:bg-white/5 border border-farm-green/10 dark:border-white/10"
+    >
+      {([
+        ['periodo', periodLabel],
+        ['mes', monthLabel]
+      ] as const).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={mode === id}
+          onClick={() => onChange(id)}
+          className={`min-h-11 rounded-xl text-sm font-bold transition-all ${
+            mode === id
+              ? 'bg-farm-green text-farm-cream shadow-sm dark:bg-[#2a2a1c] dark:ring-1 dark:ring-[#a1a17a]/60'
+              : 'text-farm-green dark:text-[#e5e5d0]/80'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MonthYearSelects({
+  month,
+  year,
+  onChange
+}: {
+  month: number;
+  year: number;
+  onChange: (month: number, year: number) => void;
+}) {
+  return (
+    <>
+      <div className="w-full sm:flex-1 lg:flex-none">
+        <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Mês</label>
+        <select
+          value={month}
+          onChange={e => onChange(Number(e.target.value), year)}
+          className={DATE_FIELD_CLASS}
+        >
+          {MESES_PT.map((nome, index) => (
+            <option key={nome} value={index + 1}>{nome}</option>
+          ))}
+        </select>
+      </div>
+      <div className="w-full sm:flex-1 lg:flex-none">
+        <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Ano</label>
+        <select
+          value={year}
+          onChange={e => onChange(month, Number(e.target.value))}
+          className={DATE_FIELD_CLASS}
+        >
+          {yearOptions().map(option => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
 function ReportsHub({ categories }: { categories: Category[] }) {
   const [selected, setSelected] = useState<'fechamento' | 'movimentos' | 'categorias'>('fechamento');
   const tabs = [
@@ -1937,6 +2043,10 @@ function ReportsHub({ categories }: { categories: Category[] }) {
 
 function FechamentoCaixa() {
   const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const [dateMode, setDateMode] = useState<'periodo' | 'mes'>('periodo');
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
   const [dataFim, setDataFim] = useState(today);
   const [data, setData] = useState<{ rows: any[]; total: number; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1960,6 +2070,18 @@ function FechamentoCaixa() {
   const formatDateBR = (iso: string) => {
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
+  };
+
+  const applyMonth = (month: number, year: number) => {
+    const bounds = monthBounds(year, month);
+    setMes(month);
+    setAno(year);
+    setDataFim(bounds.dataFim);
+  };
+
+  const changeDateMode = (mode: 'periodo' | 'mes') => {
+    setDateMode(mode);
+    if (mode === 'mes') applyMonth(mes, ano);
   };
 
   const buscar = async () => {
@@ -2053,17 +2175,34 @@ function FechamentoCaixa() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
       <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
-        <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
-            Saldo acumulado até a data
-          </label>
-          <input
-            type="date"
-            value={dataFim}
-            onChange={e => setDataFim(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
+        <div className="w-full">
+          <DateModeSwitch
+            mode={dateMode}
+            onChange={changeDateMode}
+            periodLabel="Por data"
+            monthLabel="Por mês"
           />
         </div>
+        {dateMode === 'periodo' ? (
+          <div className="w-full sm:w-auto sm:flex-1 lg:flex-none">
+            <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
+              Saldo acumulado até a data
+            </label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={e => setDataFim(e.target.value)}
+              className={DATE_FIELD_CLASS}
+            />
+          </div>
+        ) : (
+          <>
+            <MonthYearSelects month={mes} year={ano} onChange={applyMonth} />
+            <p className="w-full text-xs font-medium text-farm-green/60 dark:text-[#e5e5d0]/70">
+              Saldo acumulado até {pad2(monthBounds(ano, mes).lastDay)}/{pad2(mes)}/{ano}
+            </p>
+          </>
+        )}
         <button
           onClick={buscar}
           disabled={loading}
@@ -2163,6 +2302,9 @@ function MovimentosPeriodo() {
   const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const today = now.toISOString().split('T')[0];
 
+  const [dateMode, setDateMode] = useState<'periodo' | 'mes'>('periodo');
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(today);
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
@@ -2183,6 +2325,19 @@ function MovimentosPeriodo() {
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
+
+  const applyMonth = (month: number, year: number) => {
+    const bounds = monthBounds(year, month);
+    setMes(month);
+    setAno(year);
+    setDataInicio(bounds.dataInicio);
+    setDataFim(bounds.dataFim);
+  };
+
+  const changeDateMode = (mode: 'periodo' | 'mes') => {
+    setDateMode(mode);
+    if (mode === 'mes') applyMonth(mes, ano);
+  };
 
   const buscar = async () => {
     setLoading(true); setError('');
@@ -2282,16 +2437,30 @@ function MovimentosPeriodo() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
       <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
-        <div className="w-full sm:flex-1 lg:flex-none">
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
-          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+        <div className="w-full">
+          <DateModeSwitch mode={dateMode} onChange={changeDateMode} />
         </div>
-        <div className="w-full sm:flex-1 lg:flex-none">
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
-          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
-        </div>
+        {dateMode === 'periodo' ? (
+          <>
+            <div className="w-full sm:flex-1 lg:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                className={DATE_FIELD_CLASS} />
+            </div>
+            <div className="w-full sm:flex-1 lg:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                className={DATE_FIELD_CLASS} />
+            </div>
+          </>
+        ) : (
+          <>
+            <MonthYearSelects month={mes} year={ano} onChange={applyMonth} />
+            <p className="w-full text-xs font-medium text-farm-green/60 dark:text-[#e5e5d0]/70">
+              De {pad2(1)}/{pad2(mes)}/{ano} a {pad2(monthBounds(ano, mes).lastDay)}/{pad2(mes)}/{ano}
+            </p>
+          </>
+        )}
         <button onClick={buscar} disabled={loading}
           className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2">
           <FileText size={18} />{loading ? 'Buscando...' : 'Gerar Relatório'}
@@ -2383,6 +2552,9 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const today = now.toISOString().split('T')[0];
 
+  const [dateMode, setDateMode] = useState<'periodo' | 'mes'>('periodo');
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(today);
   const [categoriaId, setCategoriaId] = useState('');
@@ -2396,6 +2568,19 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
+
+  const applyMonth = (month: number, year: number) => {
+    const bounds = monthBounds(year, month);
+    setMes(month);
+    setAno(year);
+    setDataInicio(bounds.dataInicio);
+    setDataFim(bounds.dataFim);
+  };
+
+  const changeDateMode = (mode: 'periodo' | 'mes') => {
+    setDateMode(mode);
+    if (mode === 'mes') applyMonth(mes, ano);
+  };
 
   const buscar = async () => {
     setLoading(true); setError('');
@@ -2701,20 +2886,34 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
 
       {/* Filtros */}
       <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
-        <div className="w-full sm:flex-1 xl:flex-none">
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
-          <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
+        <div className="w-full">
+          <DateModeSwitch mode={dateMode} onChange={changeDateMode} />
         </div>
-        <div className="w-full sm:flex-1 xl:flex-none">
-          <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
-          <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]" />
-        </div>
+        {dateMode === 'periodo' ? (
+          <>
+            <div className="w-full sm:flex-1 xl:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                className={DATE_FIELD_CLASS} />
+            </div>
+            <div className="w-full sm:flex-1 xl:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                className={DATE_FIELD_CLASS} />
+            </div>
+          </>
+        ) : (
+          <>
+            <MonthYearSelects month={mes} year={ano} onChange={applyMonth} />
+            <p className="w-full text-xs font-medium text-farm-green/60 dark:text-[#e5e5d0]/70">
+              De {pad2(1)}/{pad2(mes)}/{ano} a {pad2(monthBounds(ano, mes).lastDay)}/{pad2(mes)}/{ano}
+            </p>
+          </>
+        )}
         <div className="w-full sm:flex-[2] xl:flex-none">
           <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Categoria</label>
           <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
-            className="w-full px-4 py-3 sm:py-2.5 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none font-medium xl:min-w-[200px] bg-white dark:bg-[#222218] dark:text-[#e5e5d0]">
+            className={`${DATE_FIELD_CLASS} xl:min-w-[200px]`}>
             <option value="">Todas as categorias</option>
             {categories.map(c => (
               <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
