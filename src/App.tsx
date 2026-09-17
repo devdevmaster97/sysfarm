@@ -34,6 +34,7 @@ import {
   FilterX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
 import jsPDF, { autoTable } from './pdf';
 import { API_URL } from './config';
 
@@ -1603,11 +1604,13 @@ const addPdfPageNumbers = (doc: jsPDF) => {
   }
 };
 
-type PreparedPdf = { bytes: Uint8Array; filename: string; title: string };
+type PreparedPdf = { bytes: Uint8Array; filename: string; title: string; file: File };
 
 function pdfFileFromDoc(doc: jsPDF, filename: string, title: string): PreparedPdf {
   addPdfPageNumbers(doc);
-  return { bytes: doc.bytes(), filename, title };
+  const bytes = doc.bytes();
+  const file = new File([bytes], filename, { type: 'application/pdf', lastModified: Date.now() });
+  return { bytes, filename, title, file };
 }
 
 function downloadPreparedPdf(prepared: PreparedPdf) {
@@ -1620,34 +1623,6 @@ function downloadPreparedPdf(prepared: PreparedPdf) {
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-function sharePreparedPdf(prepared: PreparedPdf | null, onError: (message: string) => void) {
-  if (!prepared) {
-    onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
-    return;
-  }
-
-  const bytes = new Uint8Array(prepared.bytes);
-  const file = new File([bytes], prepared.filename, {
-    type: 'application/pdf',
-    lastModified: Date.now()
-  });
-
-  if (typeof navigator.share !== 'function') {
-    downloadPreparedPdf(prepared);
-    return;
-  }
-
-  try {
-    const result = navigator.share({ files: [file] });
-    result?.catch((err: any) => {
-      if (err?.name === 'AbortError') return;
-      onError('Não foi possível abrir a tela de compartilhamento.');
-    });
-  } catch {
-    downloadPreparedPdf(prepared);
-  }
 }
 
 function ShareReportButton({
@@ -1663,33 +1638,112 @@ function ShareReportButton({
   title?: string;
   onError: (message: string) => void;
 }) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  useEffect(() => {
-    const button = buttonRef.current;
-    if (!button) return;
+  const openSheet = () => {
+    if (!pdfRef.current) {
+      onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
+      return;
+    }
+    onError('');
+    setSheetOpen(true);
+  };
 
-    const handleClick = () => {
-      if (button.disabled) return;
-      onError('');
-      sharePreparedPdf(pdfRef.current, onError);
-    };
+  const sendPdf = () => {
+    const prepared = pdfRef.current;
+    if (!prepared) return;
 
-    button.addEventListener('click', handleClick);
-    return () => button.removeEventListener('click', handleClick);
-  }, [ready, disabled, onError, pdfRef]);
+    const file = new File([prepared.bytes], prepared.filename, {
+      type: 'application/pdf',
+      lastModified: Date.now()
+    });
+
+    if (typeof navigator.share !== 'function') {
+      downloadPreparedPdf(prepared);
+      setSheetOpen(false);
+      return;
+    }
+
+    navigator.share({ files: [file] })
+      .then(() => setSheetOpen(false))
+      .catch((err: any) => {
+        if (err?.name === 'AbortError') {
+          setSheetOpen(false);
+          return;
+        }
+        downloadPreparedPdf(prepared);
+        setSheetOpen(false);
+      });
+  };
+
+  const savePdf = () => {
+    const prepared = pdfRef.current;
+    if (!prepared) return;
+    downloadPreparedPdf(prepared);
+    setSheetOpen(false);
+  };
 
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      disabled={disabled || !ready}
-      title={title}
-      className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-    >
-      <Share size={18} />
-      {ready ? 'Compartilhar' : 'Preparando PDF...'}
-    </button>
+    <>
+      <button
+        type="button"
+        disabled={disabled || !ready}
+        title={title}
+        onClick={openSheet}
+        className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        <Share size={18} />
+        {ready ? 'Compartilhar' : 'Preparando PDF...'}
+      </button>
+
+      {sheetOpen && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <button
+            type="button"
+            aria-label="Fechar"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSheetOpen(false)}
+          />
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="relative w-full sm:max-w-md bg-white dark:bg-[#1a1a11] rounded-t-3xl sm:rounded-3xl border border-farm-green/10 dark:border-white/10 p-5 pb-7 shadow-2xl"
+          >
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-farm-green/20 dark:bg-white/20 sm:hidden" />
+            <h3 className="font-serif text-xl font-bold text-farm-brown dark:text-[#e5e5d0]">Compartilhar relatório</h3>
+            <p className="mt-1 text-xs text-farm-green/60 dark:text-[#e5e5d0]/60 truncate">
+              {pdfRef.current?.filename}
+            </p>
+            <div className="mt-5 grid gap-3">
+              <button
+                type="button"
+                onClick={sendPdf}
+                className="w-full min-h-12 px-4 rounded-2xl bg-farm-green text-farm-cream font-bold flex items-center justify-center gap-2"
+              >
+                <Share size={18} />
+                WhatsApp, e-mail e outros
+              </button>
+              <button
+                type="button"
+                onClick={savePdf}
+                className="w-full min-h-12 px-4 rounded-2xl border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] font-bold flex items-center justify-center gap-2"
+              >
+                <Download size={18} />
+                Salvar PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                className="w-full min-h-11 px-4 rounded-2xl text-sm font-bold text-farm-green/70 dark:text-[#e5e5d0]/70"
+              >
+                Cancelar
+              </button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
