@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   Receipt, 
@@ -1603,40 +1603,298 @@ const addPdfPageNumbers = (doc: jsPDF) => {
   }
 };
 
-function downloadPdfBlob(blob: Blob, filename: string) {
+type PreparedPdf = { bytes: Uint8Array; filename: string; title: string };
+
+function pdfFileFromDoc(doc: jsPDF, filename: string, title: string): PreparedPdf {
+  addPdfPageNumbers(doc);
+  return { bytes: doc.bytes(), filename, title };
+}
+
+function downloadPreparedPdf(prepared: PreparedPdf) {
+  const blob = new Blob([prepared.bytes], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = prepared.filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-async function sharePdfDocument(doc: jsPDF, filename: string, title: string) {
-  addPdfPageNumbers(doc);
-  const blob = new Blob([doc.bytes()], { type: 'application/pdf' });
-  const file = new File([blob], filename, { type: 'application/pdf', lastModified: Date.now() });
+function sharePreparedPdf(prepared: PreparedPdf | null, onError: (message: string) => void) {
+  if (!prepared) {
+    onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
+    return;
+  }
+
+  const bytes = new Uint8Array(prepared.bytes);
+  const file = new File([bytes], prepared.filename, {
+    type: 'application/pdf',
+    lastModified: Date.now()
+  });
 
   if (typeof navigator.share !== 'function') {
-    downloadPdfBlob(blob, filename);
-    return 'downloaded' as const;
+    downloadPreparedPdf(prepared);
+    return;
   }
 
-  const withFile = { files: [file] };
-  const withMeta = { files: [file], title, text: title };
-  let payload: ShareData = withFile;
   try {
-    if (typeof navigator.canShare === 'function' && navigator.canShare(withMeta)) {
-      payload = withMeta;
-    }
+    const result = navigator.share({ files: [file] });
+    result?.catch((err: any) => {
+      if (err?.name === 'AbortError') return;
+      onError('Não foi possível abrir a tela de compartilhamento.');
+    });
   } catch {
-    payload = withFile;
+    downloadPreparedPdf(prepared);
+  }
+}
+
+function ShareReportButton({
+  pdfRef,
+  ready,
+  disabled,
+  title,
+  onError
+}: {
+  pdfRef: React.RefObject<PreparedPdf | null>;
+  ready: boolean;
+  disabled?: boolean;
+  title?: string;
+  onError: (message: string) => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+
+    const handleClick = () => {
+      if (button.disabled) return;
+      onError('');
+      sharePreparedPdf(pdfRef.current, onError);
+    };
+
+    button.addEventListener('click', handleClick);
+    return () => button.removeEventListener('click', handleClick);
+  }, [ready, disabled, onError, pdfRef]);
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      disabled={disabled || !ready}
+      title={title}
+      className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+    >
+      <Share size={18} />
+      {ready ? 'Compartilhar' : 'Preparando PDF...'}
+    </button>
+  );
+}
+
+function buildFechamentoPdf(data: { rows: any[]; total: number; dataFim: string }): PreparedPdf {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  addPdfHeader(doc, 'FECHAMENTO DO CAIXA', `Saldo acumulado até ${pdfDate(data.dataFim)}`);
+  autoTable(doc, {
+    startY: 29,
+    head: [['D/C', '#', 'Banco', 'Agência', 'Conta', 'Saldo']],
+    body: data.rows.map(row => {
+      const saldo = parseFloat(row.saldo);
+      return [
+        saldo > 0 ? 'C' : saldo < 0 ? 'D' : '',
+        row.id_banco,
+        row.nome,
+        row.numero_agencia || '—',
+        row.numero_conta || '—',
+        `R$ ${pdfMoney(saldo)}`
+      ];
+    }),
+    foot: [[
+      data.total >= 0 ? 'C' : 'D',
+      '',
+      'SALDO TOTAL',
+      '',
+      '',
+      `R$ ${pdfMoney(data.total)}`
+    ]],
+    theme: 'grid',
+    headStyles: { fillColor: [90, 90, 64], textColor: 255 },
+    footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
+    styles: { fontSize: 8, cellPadding: 2.2 },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 12 },
+      1: { halign: 'center', cellWidth: 12 },
+      5: { halign: 'right', cellWidth: 34 }
+    },
+    margin: { left: 14, right: 14, bottom: 14 }
+  });
+  return pdfFileFromDoc(doc, `fechamento-caixa-${data.dataFim}.pdf`, 'Fechamento do Caixa');
+}
+
+function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: string }): PreparedPdf {
+  let saldo = 0;
+  let totalCreditos = 0;
+  let totalDebitos = 0;
+  const body = data.rows.map(row => {
+    const valor = parseFloat(row.valor);
+    if (row.natureza === 'C') {
+      saldo += valor;
+      totalCreditos += valor;
+    } else {
+      saldo -= valor;
+      totalDebitos += valor;
+    }
+    return [
+      row.natureza,
+      pdfDate(row.data_lancamento),
+      row.historico || '',
+      row.categoria || 'Sem categoria',
+      row.id_banco || '—',
+      `R$ ${pdfMoney(valor)}`,
+      `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
+    ];
+  });
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  addPdfHeader(
+    doc,
+    'MOVIMENTOS POR DATA',
+    `Período: ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · ${data.rows.length} lançamentos`
+  );
+  autoTable(doc, {
+    startY: 29,
+    head: [['D/C', 'Data', 'Histórico', 'Categoria', 'Banco', 'Valor', 'Saldo acumulado']],
+    body,
+    foot: [[
+      '',
+      '',
+      'TOTAIS',
+      `Créditos: R$ ${pdfMoney(totalCreditos)}`,
+      `Débitos: R$ ${pdfMoney(totalDebitos)}`,
+      '',
+      `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
+    ]],
+    theme: 'grid',
+    headStyles: { fillColor: [90, 90, 64], textColor: 255 },
+    footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
+    styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 68 },
+      4: { halign: 'center', cellWidth: 15 },
+      5: { halign: 'right', cellWidth: 28 },
+      6: { halign: 'right', cellWidth: 34 }
+    },
+    margin: { left: 10, right: 10, bottom: 14 }
+  });
+  return pdfFileFromDoc(doc, `movimentos-${data.dataInicio}-a-${data.dataFim}.pdf`, 'Movimentos por Data');
+}
+
+function buildCategoriaPdf(params: {
+  data: { dataInicio: string; dataFim: string };
+  visualizacao: 'detalhado' | 'resumo' | 'debitos' | 'creditos';
+  gruposSelecionados: any[];
+  gruposResumoSelecionados: any[];
+}): PreparedPdf | null {
+  const { data, visualizacao, gruposSelecionados, gruposResumoSelecionados } = params;
+  const gruposParaPdf = visualizacao === 'detalhado' ? gruposSelecionados : gruposResumoSelecionados;
+  if (gruposParaPdf.length === 0) return null;
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const tituloModo = {
+    detalhado: 'Detalhado por categoria',
+    resumo: 'Resumo por categoria',
+    debitos: 'Somente débitos por categoria',
+    creditos: 'Somente créditos por categoria'
+  }[visualizacao];
+  addPdfHeader(
+    doc,
+    'MOVIMENTOS POR CATEGORIA',
+    `${tituloModo} · ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · ${gruposParaPdf.length} categorias`
+  );
+
+  if (visualizacao === 'detalhado') {
+    let cursorY = 31;
+    gruposSelecionados.forEach((grupo, index) => {
+      if (cursorY > 250) {
+        doc.addPage();
+        cursorY = 18;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(42, 42, 28);
+      doc.text(grupo.cat.toUpperCase(), 14, cursorY);
+
+      autoTable(doc, {
+        startY: cursorY + 3,
+        head: [['D/C', 'Data', 'Histórico', 'Banco', 'Valor']],
+        body: grupo.rows.map((row: any) => [
+          row.natureza,
+          pdfDate(row.data_lancamento),
+          row.historico || '',
+          row.id_banco || '—',
+          `R$ ${pdfMoney(parseFloat(row.valor))}`
+        ]),
+        foot: [[
+          grupo.total >= 0 ? 'C' : 'D',
+          '',
+          `${grupo.rows.length} lançamentos`,
+          'Total',
+          `${grupo.total < 0 ? '- ' : ''}R$ ${pdfMoney(grupo.total)}`
+        ]],
+        theme: 'grid',
+        headStyles: { fillColor: [90, 90, 64], textColor: 255 },
+        footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
+        styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 11 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 91 },
+          3: { halign: 'center', cellWidth: 18 },
+          4: { halign: 'right', cellWidth: 32 }
+        },
+        margin: { left: 14, right: 14, bottom: 14 },
+        showHead: 'everyPage'
+      });
+      cursorY = ((doc as any).lastAutoTable?.finalY ?? cursorY) + (index === gruposSelecionados.length - 1 ? 0 : 10);
+    });
+  } else {
+    const total = gruposResumoSelecionados.reduce((acc, grupo) => acc + (
+      visualizacao === 'resumo' ? grupo.valorResumo : Math.abs(grupo.valorResumo)
+    ), 0);
+    const naturezaTotal = visualizacao === 'debitos'
+      ? 'D'
+      : visualizacao === 'creditos'
+        ? 'C'
+        : total >= 0 ? 'C' : 'D';
+
+    autoTable(doc, {
+      startY: 29,
+      head: [['Categoria', 'Total']],
+      body: gruposResumoSelecionados.map(grupo => [
+        grupo.cat,
+        `${visualizacao === 'resumo' && grupo.valorResumo < 0 ? '- ' : ''}R$ ${pdfMoney(grupo.valorResumo)} ${grupo.naturezaResumo}`
+      ]),
+      foot: [[
+        'TOTAL GERAL',
+        `${visualizacao === 'resumo' && total < 0 ? '- ' : ''}R$ ${pdfMoney(total)} ${naturezaTotal}`
+      ]],
+      theme: 'grid',
+      headStyles: { fillColor: [90, 90, 64], textColor: 255 },
+      footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      columnStyles: { 1: { halign: 'right', cellWidth: 48 } },
+      margin: { left: 14, right: 14, bottom: 14 }
+    });
   }
 
-  await navigator.share(payload);
-  return 'shared' as const;
+  return pdfFileFromDoc(
+    doc,
+    `movimentos-categoria-${visualizacao}-${data.dataInicio}-a-${data.dataFim}.pdf`,
+    'Movimentos por Categoria'
+  );
 }
 
 function ReportsHub({ categories }: { categories: Category[] }) {
@@ -1682,8 +1940,19 @@ function FechamentoCaixa() {
   const [dataFim, setDataFim] = useState(today);
   const [data, setData] = useState<{ rows: any[]; total: number; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
+  const [pdfReady, setPdfReady] = useState(false);
+  const pdfRef = useRef<PreparedPdf | null>(null);
+
+  useEffect(() => {
+    if (!data) {
+      pdfRef.current = null;
+      setPdfReady(false);
+      return;
+    }
+    pdfRef.current = buildFechamentoPdf(data);
+    setPdfReady(true);
+  }, [data]);
 
   const fmt = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -1780,68 +2049,6 @@ function FechamentoCaixa() {
     setTimeout(() => { win.print(); }, 400);
   };
 
-  const compartilhar = async () => {
-    if (!data) return;
-    setError('');
-    try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      addPdfHeader(
-        doc,
-        'FECHAMENTO DO CAIXA',
-        `Saldo acumulado até ${pdfDate(data.dataFim)}`
-      );
-      autoTable(doc, {
-        startY: 29,
-        head: [['D/C', '#', 'Banco', 'Agência', 'Conta', 'Saldo']],
-        body: data.rows.map(row => {
-          const saldo = parseFloat(row.saldo);
-          return [
-            saldo > 0 ? 'C' : saldo < 0 ? 'D' : '',
-            row.id_banco,
-            row.nome,
-            row.numero_agencia || '—',
-            row.numero_conta || '—',
-            `R$ ${pdfMoney(saldo)}`
-          ];
-        }),
-        foot: [[
-          data.total >= 0 ? 'C' : 'D',
-          '',
-          'SALDO TOTAL',
-          '',
-          '',
-          `R$ ${pdfMoney(data.total)}`
-        ]],
-        theme: 'grid',
-        headStyles: { fillColor: [90, 90, 64], textColor: 255 },
-        footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
-        styles: { fontSize: 8, cellPadding: 2.2 },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 12 },
-          1: { halign: 'center', cellWidth: 12 },
-          5: { halign: 'right', cellWidth: 34 }
-        },
-        margin: { left: 14, right: 14, bottom: 14 }
-      });
-      const sharePromise = sharePdfDocument(
-        doc,
-        `fechamento-caixa-${data.dataFim}.pdf`,
-        'Fechamento do Caixa'
-      );
-      setSharing(true);
-      await sharePromise;
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      if (err?.name === 'NotAllowedError') {
-        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
-      } else {
-        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Filtro */}
@@ -1874,15 +2081,7 @@ function FechamentoCaixa() {
               <Printer size={18} />
               Imprimir
             </button>
-            <button
-              type="button"
-              onClick={compartilhar}
-              disabled={sharing}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Share size={18} />
-              {sharing ? 'Abrindo...' : 'Compartilhar'}
-            </button>
+            <ShareReportButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
           </>
         )}
       </div>
@@ -1968,8 +2167,19 @@ function MovimentosPeriodo() {
   const [dataFim, setDataFim] = useState(today);
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
+  const [pdfReady, setPdfReady] = useState(false);
+  const pdfRef = useRef<PreparedPdf | null>(null);
+
+  useEffect(() => {
+    if (!data) {
+      pdfRef.current = null;
+      setPdfReady(false);
+      return;
+    }
+    pdfRef.current = buildMovimentosPdf(data);
+    setPdfReady(true);
+  }, [data]);
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
@@ -2058,85 +2268,6 @@ function MovimentosPeriodo() {
     setTimeout(() => win.print(), 400);
   };
 
-  const compartilhar = async () => {
-    if (!data) return;
-    setError('');
-    try {
-      let saldo = 0;
-      let totalCreditos = 0;
-      let totalDebitos = 0;
-      const body = data.rows.map(row => {
-        const valor = parseFloat(row.valor);
-        if (row.natureza === 'C') {
-          saldo += valor;
-          totalCreditos += valor;
-        } else {
-          saldo -= valor;
-          totalDebitos += valor;
-        }
-        return [
-          row.natureza,
-          pdfDate(row.data_lancamento),
-          row.historico || '',
-          row.categoria || 'Sem categoria',
-          row.id_banco || '—',
-          `R$ ${pdfMoney(valor)}`,
-          `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
-        ];
-      });
-
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      addPdfHeader(
-        doc,
-        'MOVIMENTOS POR DATA',
-        `Período: ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · ${data.rows.length} lançamentos`
-      );
-      autoTable(doc, {
-        startY: 29,
-        head: [['D/C', 'Data', 'Histórico', 'Categoria', 'Banco', 'Valor', 'Saldo acumulado']],
-        body,
-        foot: [[
-          '',
-          '',
-          'TOTAIS',
-          `Créditos: R$ ${pdfMoney(totalCreditos)}`,
-          `Débitos: R$ ${pdfMoney(totalDebitos)}`,
-          '',
-          `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
-        ]],
-        theme: 'grid',
-        headStyles: { fillColor: [90, 90, 64], textColor: 255 },
-        footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
-        styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { cellWidth: 20 },
-          2: { cellWidth: 68 },
-          4: { halign: 'center', cellWidth: 15 },
-          5: { halign: 'right', cellWidth: 28 },
-          6: { halign: 'right', cellWidth: 34 }
-        },
-        margin: { left: 10, right: 10, bottom: 14 }
-      });
-      const sharePromise = sharePdfDocument(
-        doc,
-        `movimentos-${data.dataInicio}-a-${data.dataFim}.pdf`,
-        'Movimentos por Data'
-      );
-      setSharing(true);
-      await sharePromise;
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      if (err?.name === 'NotAllowedError') {
-        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
-      } else {
-        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
-
   // Calcula saldo acumulado para a tela
   let saldoAcum = 0;
   let totalC = 0, totalD = 0;
@@ -2171,15 +2302,7 @@ function MovimentosPeriodo() {
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
               <Printer size={18} />Imprimir
             </button>
-            <button
-              type="button"
-              onClick={compartilhar}
-              disabled={sharing}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Share size={18} />
-              {sharing ? 'Abrindo...' : 'Compartilhar'}
-            </button>
+            <ShareReportButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
           </>
         )}
       </div>
@@ -2267,8 +2390,9 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<string>>(new Set());
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
+  const [pdfReady, setPdfReady] = useState(false);
+  const pdfRef = useRef<PreparedPdf | null>(null);
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
@@ -2347,6 +2471,21 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
     () => gruposResumo.filter(g => categoriasSelecionadas.has(g.cat)),
     [gruposResumo, categoriasSelecionadas]
   );
+
+  useEffect(() => {
+    if (!data) {
+      pdfRef.current = null;
+      setPdfReady(false);
+      return;
+    }
+    pdfRef.current = buildCategoriaPdf({
+      data,
+      visualizacao,
+      gruposSelecionados,
+      gruposResumoSelecionados
+    });
+    setPdfReady(!!pdfRef.current);
+  }, [data, visualizacao, gruposSelecionados, gruposResumoSelecionados]);
 
   const categoriasVisiveis = visualizacao === 'detalhado'
     ? grupos.map(g => g.cat)
@@ -2494,121 +2633,6 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
     setTimeout(() => win.print(), 400);
   };
 
-  const compartilhar = async () => {
-    const gruposParaPdf = visualizacao === 'detalhado'
-      ? gruposSelecionados
-      : gruposResumoSelecionados;
-    if (!data || gruposParaPdf.length === 0) return;
-
-    setError('');
-    try {
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const tituloModo = {
-        detalhado: 'Detalhado por categoria',
-        resumo: 'Resumo por categoria',
-        debitos: 'Somente débitos por categoria',
-        creditos: 'Somente créditos por categoria'
-      }[visualizacao];
-      addPdfHeader(
-        doc,
-        'MOVIMENTOS POR CATEGORIA',
-        `${tituloModo} · ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · ${gruposParaPdf.length} categorias`
-      );
-
-      if (visualizacao === 'detalhado') {
-        let cursorY = 31;
-        gruposSelecionados.forEach((grupo, index) => {
-          if (cursorY > 250) {
-            doc.addPage();
-            cursorY = 18;
-          }
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(11);
-          doc.setTextColor(42, 42, 28);
-          doc.text(grupo.cat.toUpperCase(), 14, cursorY);
-
-          autoTable(doc, {
-            startY: cursorY + 3,
-            head: [['D/C', 'Data', 'Histórico', 'Banco', 'Valor']],
-            body: grupo.rows.map(row => [
-              row.natureza,
-              pdfDate(row.data_lancamento),
-              row.historico || '',
-              row.id_banco || '—',
-              `R$ ${pdfMoney(parseFloat(row.valor))}`
-            ]),
-            foot: [[
-              grupo.total >= 0 ? 'C' : 'D',
-              '',
-              `${grupo.rows.length} lançamentos`,
-              'Total',
-              `${grupo.total < 0 ? '- ' : ''}R$ ${pdfMoney(grupo.total)}`
-            ]],
-            theme: 'grid',
-            headStyles: { fillColor: [90, 90, 64], textColor: 255 },
-            footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
-            styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
-            columnStyles: {
-              0: { halign: 'center', cellWidth: 11 },
-              1: { cellWidth: 20 },
-              2: { cellWidth: 91 },
-              3: { halign: 'center', cellWidth: 18 },
-              4: { halign: 'right', cellWidth: 32 }
-            },
-            margin: { left: 14, right: 14, bottom: 14 },
-            showHead: 'everyPage'
-          });
-          cursorY = ((doc as any).lastAutoTable?.finalY ?? cursorY) + (index === gruposSelecionados.length - 1 ? 0 : 10);
-        });
-      } else {
-        const total = gruposResumoSelecionados.reduce((acc, grupo) => acc + (
-          visualizacao === 'resumo' ? grupo.valorResumo : Math.abs(grupo.valorResumo)
-        ), 0);
-        const naturezaTotal = visualizacao === 'debitos'
-          ? 'D'
-          : visualizacao === 'creditos'
-            ? 'C'
-            : total >= 0 ? 'C' : 'D';
-
-        autoTable(doc, {
-          startY: 29,
-          head: [['Categoria', 'Total']],
-          body: gruposResumoSelecionados.map(grupo => [
-            grupo.cat,
-            `${visualizacao === 'resumo' && grupo.valorResumo < 0 ? '- ' : ''}R$ ${pdfMoney(grupo.valorResumo)} ${grupo.naturezaResumo}`
-          ]),
-          foot: [[
-            'TOTAL GERAL',
-            `${visualizacao === 'resumo' && total < 0 ? '- ' : ''}R$ ${pdfMoney(total)} ${naturezaTotal}`
-          ]],
-          theme: 'grid',
-          headStyles: { fillColor: [90, 90, 64], textColor: 255 },
-          footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
-          styles: { fontSize: 9, cellPadding: 2.5 },
-          columnStyles: { 1: { halign: 'right', cellWidth: 48 } },
-          margin: { left: 14, right: 14, bottom: 14 }
-        });
-      }
-
-      const sharePromise = sharePdfDocument(
-        doc,
-        `movimentos-categoria-${visualizacao}-${data.dataInicio}-a-${data.dataFim}.pdf`,
-        'Movimentos por Categoria'
-      );
-      setSharing(true);
-      await sharePromise;
-    } catch (err: any) {
-      if (err?.name === 'AbortError') return;
-      if (err?.name === 'NotAllowedError') {
-        setError('Toque novamente em Compartilhar para escolher WhatsApp ou e-mail.');
-      } else {
-        setError('Não foi possível abrir o compartilhamento. Tente pelo Chrome ou Safari.');
-      }
-    } finally {
-      setSharing(false);
-    }
-  };
-
   const opcoesVisualizacao = [
     { id: 'detalhado', label: 'Detalhado', description: 'Categorias e lançamentos' },
     { id: 'resumo', label: 'Resumo', description: 'Saldo total por categoria' },
@@ -2711,16 +2735,13 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             >
               <Printer size={18} />Imprimir
             </button>
-            <button
-              type="button"
-              onClick={compartilhar}
-              disabled={sharing || totalCategoriasVisiveisSelecionadas === 0}
-              title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Gerar e compartilhar PDF'}
-              className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <Share size={18} />
-              {sharing ? 'Abrindo...' : 'Compartilhar'}
-            </button>
+            <ShareReportButton
+              pdfRef={pdfRef}
+              ready={pdfReady}
+              disabled={totalCategoriasVisiveisSelecionadas === 0}
+              title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Compartilhar PDF'}
+              onError={setError}
+            />
           </>
         )}
       </div>
