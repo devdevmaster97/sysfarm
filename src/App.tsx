@@ -34,8 +34,7 @@ import {
   FilterX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import jsPDF, { autoTable } from './pdf';
 import { API_URL } from './config';
 
 // --- Types ---
@@ -1608,11 +1607,22 @@ async function sharePdfDocument(doc: jsPDF, filename: string, title: string) {
   addPdfPageNumbers(doc);
   const blob = doc.output('blob');
   const file = new File([blob], filename, { type: 'application/pdf' });
-  const shareData = { title, files: [file] };
+  const shareData = {
+    title,
+    text: title,
+    files: [file]
+  };
 
-  if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
-    await navigator.share(shareData);
-    return 'shared' as const;
+  try {
+    const canShareFiles = typeof navigator.canShare === 'function'
+      ? navigator.canShare({ files: [file] })
+      : false;
+    if (navigator.share && canShareFiles) {
+      await navigator.share(shareData);
+      return 'shared' as const;
+    }
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
   }
 
   doc.save(filename);
@@ -1810,7 +1820,7 @@ function FechamentoCaixa() {
         'Fechamento do Caixa'
       );
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou partilhar o PDF.');
+      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
     } finally {
       setSharing(false);
     }
@@ -1854,7 +1864,7 @@ function FechamentoCaixa() {
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Partilhar PDF'}
+              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
             </button>
           </>
         )}
@@ -2098,7 +2108,7 @@ function MovimentosPeriodo() {
         'Movimentos por Data'
       );
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou partilhar o PDF.');
+      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
     } finally {
       setSharing(false);
     }
@@ -2144,7 +2154,7 @@ function MovimentosPeriodo() {
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Partilhar PDF'}
+              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
             </button>
           </>
         )}
@@ -2563,7 +2573,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         'Movimentos por Categoria'
       );
     } catch (err: any) {
-      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou partilhar o PDF.');
+      if (err?.name !== 'AbortError') setError('Não foi possível gerar ou compartilhar o PDF.');
     } finally {
       setSharing(false);
     }
@@ -2611,7 +2621,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         {data && categoriasVisiveis.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-2 pt-4 mt-4 border-t border-farm-green/10 dark:border-white/10">
             <span className="text-xs font-medium text-center sm:text-left text-farm-green/60 dark:text-[#e5e5d0]/70">
-              {totalCategoriasVisiveisSelecionadas} de {categoriasVisiveis.length} categorias selecionadas para impressão
+              {totalCategoriasVisiveisSelecionadas} de {categoriasVisiveis.length} categorias selecionadas para impressão e compartilhamento
             </span>
             <div className="grid grid-cols-2 sm:flex gap-2">
               <button
@@ -2674,11 +2684,11 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
             <button
               onClick={compartilhar}
               disabled={sharing || totalCategoriasVisiveisSelecionadas === 0}
-              title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Gerar e partilhar PDF'}
+              title={totalCategoriasVisiveisSelecionadas === 0 ? 'Marque pelo menos uma categoria' : 'Gerar e compartilhar PDF'}
               className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <Share size={18} />
-              {sharing ? 'Gerando PDF...' : 'Partilhar PDF'}
+              {sharing ? 'Gerando PDF...' : 'Compartilhar'}
             </button>
           </>
         )}
