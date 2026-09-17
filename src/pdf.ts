@@ -174,7 +174,7 @@ export default class jsPDF {
       objects[contentIds[index]] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
     });
 
-    let pdf = '%PDF-1.4\n%1234\n';
+    let pdf = '%PDF-1.4\n%' + String.fromCharCode(0xe2, 0xe3, 0xcf, 0xd3) + '\n';
     const offsets: number[] = [0];
     for (let id = 1; id < objects.length; id += 1) {
       offsets[id] = pdf.length;

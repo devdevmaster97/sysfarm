@@ -1618,10 +1618,32 @@ function pdfFileFromDoc(doc: jsPDF, filename: string, title: string): PreparedPd
   return { bytes, filename, title, file };
 }
 
+function sharePdfFilename(name: string) {
+  const base = name.replace(/\.pdf$/i, '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40);
+  return `${base || 'relatorio'}.pdf`;
+}
+
+function asNativeFile(file: File) {
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    const nativeFile = transfer.files[0];
+    if (nativeFile && nativeFile.size > 0) return nativeFile;
+  } catch {
+    // DataTransfer is unavailable on some WebViews
+  }
+  return file;
+}
+
 function pdfFileForShare(prepared: PreparedPdf) {
-  const filename = prepared.filename.endsWith('.pdf') ? prepared.filename : `${prepared.filename}.pdf`;
-  const blob = new Blob([copyPdfBytes(prepared.bytes)], { type: 'application/pdf' });
-  return new File([blob], filename, { type: 'application/pdf', lastModified: Date.now() });
+  const filename = sharePdfFilename(prepared.filename);
+  const bytes = copyPdfBytes(prepared.bytes);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const file = new File([buffer], filename, {
+    type: 'application/pdf',
+    lastModified: Date.now()
+  });
+  return asNativeFile(file);
 }
 
 function downloadPreparedPdf(prepared: PreparedPdf) {
@@ -1759,15 +1781,6 @@ function ShareReportButton({
     }
 
     const data: ShareData = { files: [file] };
-    try {
-      if (typeof navigator.canShare === 'function' && !navigator.canShare(data)) {
-        onError('Este celular não permite anexar o PDF no compartilhamento. Abra o SysFarm no Chrome ou no Safari.');
-        return;
-      }
-    } catch {
-      // some browsers throw on canShare({ files }); still try navigator.share
-    }
-
     sharing.current = true;
     const finish = () => { sharing.current = false; };
 
@@ -1775,6 +1788,7 @@ function ShareReportButton({
       navigator.share(data).then(finish).catch((err: any) => {
         finish();
         if (err?.name === 'AbortError') return;
+        if (/cancel|abort/i.test(String(err?.message || ''))) return;
         onError('Não foi possível anexar o PDF na tela de compartilhamento. Tente de novo pelo Chrome ou Safari.');
       });
     } catch {
