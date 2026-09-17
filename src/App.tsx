@@ -1715,8 +1715,7 @@ function ShareReportButton({
   pdfRef,
   ready,
   disabled,
-  title,
-  onError
+  title
 }: {
   pdfRef: React.RefObject<PreparedPdf | null>;
   ready: boolean;
@@ -1724,51 +1723,36 @@ function ShareReportButton({
   title?: string;
   onError: (message: string) => void;
 }) {
-  const nativeShareStarted = useRef(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const shareNow = () => {
-    const prepared = pdfRef.current;
-    if (!prepared) {
-      onError('O PDF ainda está sendo preparado. Aguarde um instante e toque novamente.');
-      return false;
-    }
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!button) return;
 
-    if (typeof navigator.share !== 'function') {
-      downloadPreparedPdf(prepared);
-      return true;
-    }
+    const handleClick = () => {
+      if (button.disabled) return;
+      const prepared = pdfRef.current;
+      if (!prepared || typeof navigator.share !== 'function') return;
 
-    try {
-      const result = navigator.share({ files: [prepared.file] });
-      result.catch((err: any) => {
-        if (err?.name === 'AbortError') return;
-        downloadPreparedPdf(prepared);
+      const file = new File([prepared.bytes], prepared.filename, {
+        type: 'application/pdf',
+        lastModified: Date.now()
       });
-      return true;
-    } catch {
-      downloadPreparedPdf(prepared);
-      return true;
-    }
-  };
+      navigator.share({ files: [file] }).catch((err: any) => {
+        if (err?.name === 'AbortError') return;
+      });
+    };
+
+    button.addEventListener('click', handleClick);
+    return () => button.removeEventListener('click', handleClick);
+  }, [ready, disabled, pdfRef]);
 
   return (
     <button
+      ref={buttonRef}
       type="button"
       disabled={disabled || !ready}
       title={title}
-      onPointerDown={event => {
-        if (disabled || !ready) return;
-        if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
-        nativeShareStarted.current = shareNow();
-      }}
-      onClick={event => {
-        if (nativeShareStarted.current) {
-          event.preventDefault();
-          nativeShareStarted.current = false;
-          return;
-        }
-        shareNow();
-      }}
       className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-coffee text-white rounded-xl font-bold hover:bg-farm-brown transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
     >
       <Share size={18} />
