@@ -27,6 +27,92 @@ async function startServer() {
     connectionString,
     ssl: { rejectUnauthorized: false } // supabase exige ssl true para conexão externa
   });
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS saldo_bancario (
+      id_saldo BIGSERIAL PRIMARY KEY,
+      data_referencia DATE NOT NULL UNIQUE,
+      saldo NUMERIC(15, 2) NOT NULL,
+      id_usuario INTEGER,
+      criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_saldo_bancario_data
+      ON saldo_bancario (data_referencia DESC)
+  `);
+
+  const isIsoDate = (value: unknown) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(String(value ?? ''));
+
+  const previousIsoDate = (iso: string) => {
+    const [year, month, day] = iso.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() - 1);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const monthEndIsoDate = (iso: string) => {
+    const [year, month] = iso.slice(0, 7).split('-').map(Number);
+    return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  };
+
+  const getBankBalanceAtDate = async (targetDate: string) => {
+    const result = await pool.query(`
+      WITH referencia AS (
+        SELECT data_referencia, saldo
+        FROM saldo_bancario
+        ORDER BY
+          CASE WHEN data_referencia <= $1::date THEN 0 ELSE 1 END,
+          CASE WHEN data_referencia <= $1::date THEN data_referencia END DESC,
+          CASE WHEN data_referencia > $1::date THEN data_referencia END ASC
+        LIMIT 1
+      ),
+      ajuste AS (
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN r.data_referencia <= $1::date THEN
+              CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
+            ELSE
+              CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN -c.valor ELSE c.valor END
+          END
+        ), 0) AS valor
+        FROM referencia r
+        LEFT JOIN caixa c ON c.id_banco IS NOT NULL AND (
+          (
+            r.data_referencia <= $1::date
+            AND c.data_lancamento > r.data_referencia
+            AND c.data_lancamento <= $1::date
+          )
+          OR
+          (
+            r.data_referencia > $1::date
+            AND c.data_lancamento > $1::date
+            AND c.data_lancamento <= r.data_referencia
+          )
+        )
+      )
+      SELECT
+        r.data_referencia,
+        r.saldo AS saldo_referencia,
+        (r.saldo + a.valor) AS saldo
+      FROM referencia r
+      CROSS JOIN ajuste a
+    `, [targetDate]);
+
+    if (result.rows.length === 0) {
+      return { configured: false, saldo: 0, dataReferencia: null, saldoReferencia: 0 };
+    }
+
+    const row = result.rows[0];
+    return {
+      configured: true,
+      saldo: parseFloat(row.saldo),
+      dataReferencia: String(row.data_referencia).split('T')[0],
+      saldoReferencia: parseFloat(row.saldo_referencia)
+    };
+  };
   
   const connSource = process.env.DATABASE_PUBLIC_URL ? 'DATABASE_PUBLIC_URL' : process.env.DATABASE_URL ? 'DATABASE_URL' : 'NONE';
   console.log('Database source:', connSource);
@@ -150,6 +236,50 @@ async function startServer() {
     }
   });
 
+  // Saldo consolidado informado (soma de todas as contas bancárias)
+  app.get("/api/bank-balance", async (_req: Request, res: Response) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const current = await getBankBalanceAtDate(today);
+      const history = await pool.query(`
+        SELECT id_saldo, data_referencia, saldo, id_usuario, criado_em, atualizado_em
+        FROM saldo_bancario
+        ORDER BY data_referencia DESC, id_saldo DESC
+        LIMIT 12
+      `);
+      res.json({ ...current, dataSaldo: today, history: history.rows });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
+  app.post("/api/bank-balance", async (req: Request, res: Response) => {
+    try {
+      const { data_referencia, saldo, id_usuario } = req.body;
+      const saldoNumber = Number(saldo);
+      if (!isIsoDate(data_referencia) || !Number.isFinite(saldoNumber)) {
+        return res.status(400).json({
+          status: "error",
+          message: "Informe uma data de referência e um saldo válidos."
+        });
+      }
+
+      const result = await pool.query(`
+        INSERT INTO saldo_bancario (data_referencia, saldo, id_usuario)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (data_referencia) DO UPDATE SET
+          saldo = EXCLUDED.saldo,
+          id_usuario = EXCLUDED.id_usuario,
+          atualizado_em = NOW()
+        RETURNING *
+      `, [data_referencia, saldoNumber, id_usuario || null]);
+
+      res.status(201).json({ status: "success", data: result.rows[0] });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
   // Expenses/Transactions routes
   app.post("/api/expenses", async (req: Request, res: Response) => {
     try {
@@ -219,7 +349,20 @@ async function startServer() {
       const total = parseInt(countResult.rows[0].total, 10);
 
       const dataResult = await pool.query(
-        `SELECT c.*, cat.descricao as categoria_nome
+        `SELECT c.*, cat.descricao as categoria_nome,
+                NOT EXISTS (
+                  SELECT 1
+                  FROM caixa month_row
+                  WHERE month_row.data_lancamento >= date_trunc('month', c.data_lancamento)
+                    AND month_row.data_lancamento < date_trunc('month', c.data_lancamento) + INTERVAL '1 month'
+                    AND (
+                      month_row.data_lancamento < c.data_lancamento
+                      OR (
+                        month_row.data_lancamento = c.data_lancamento
+                        AND month_row.id_caixa < c.id_caixa
+                      )
+                    )
+                ) AS encerra_mes
                 ${hasUsuario ? ', u.nome as usuario_nome' : ", '' as usuario_nome"}
          FROM caixa c
          LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
@@ -230,8 +373,32 @@ async function startServer() {
         [...params, limitNum, offset]
       );
 
+      const today = new Date().toISOString().slice(0, 10);
+      const monthEndDates = Array.from(new Set(
+        dataResult.rows
+          .filter((row: any) => row.encerra_mes)
+          .map((row: any) => monthEndIsoDate(String(row.data_lancamento).split('T')[0]))
+          .filter((date: string) => date <= today)
+      ));
+      const balances = new Map<string, Awaited<ReturnType<typeof getBankBalanceAtDate>>>();
+      await Promise.all(monthEndDates.map(async date => {
+        balances.set(date, await getBankBalanceAtDate(date));
+      }));
+      const rows = dataResult.rows.map((row: any) => {
+        if (!row.encerra_mes) return row;
+        const date = monthEndIsoDate(String(row.data_lancamento).split('T')[0]);
+        if (date > today) return { ...row, encerra_mes: false };
+        const balance = balances.get(date);
+        return {
+          ...row,
+          data_saldo_mes: date,
+          saldo_fim_mes: balance?.saldo ?? null,
+          saldo_configurado: balance?.configured ?? false
+        };
+      });
+
       res.json({
-        data: dataResult.rows,
+        data: rows,
         total,
         page: pageNum,
         totalPages: Math.ceil(total / limitNum),
@@ -425,6 +592,81 @@ async function startServer() {
       `, [dataInicio, dataFim]);
 
       res.json({ rows: result.rows, dataInicio, dataFim });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
+    }
+  });
+
+  // Extrato consolidado — saldo de abertura + saldo após cada movimentação
+  app.get("/api/reports/extrato-bancario", async (req: Request, res: Response) => {
+    try {
+      const dataInicio = String(req.query.dataInicio || '');
+      const dataFim = String(req.query.dataFim || '');
+      if (!isIsoDate(dataInicio) || !isIsoDate(dataFim)) {
+        return res.status(400).json({
+          status: "error",
+          message: "dataInicio e dataFim são obrigatórios."
+        });
+      }
+      if (dataInicio > dataFim) {
+        return res.status(400).json({
+          status: "error",
+          message: "A data inicial não pode ser posterior à data final."
+        });
+      }
+
+      const openingDate = previousIsoDate(dataInicio);
+      const opening = await getBankBalanceAtDate(openingDate);
+      if (!opening.configured) {
+        return res.status(400).json({
+          status: "error",
+          message: "Cadastre o saldo bancário atual em Configurações antes de gerar o extrato."
+        });
+      }
+
+      const result = await pool.query(`
+        SELECT
+          c.id_caixa,
+          c.data_lancamento,
+          UPPER(TRIM(c.natureza)) AS natureza,
+          c.historico,
+          c.valor,
+          COALESCE(cat.descricao, 'Sem categoria') AS categoria,
+          c.id_banco,
+          COALESCE(b.nome, 'Sem banco') AS banco_nome
+        FROM caixa c
+        LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
+        LEFT JOIN banco b ON c.id_banco = b.id_banco
+        WHERE c.id_banco IS NOT NULL
+          AND c.data_lancamento BETWEEN $1 AND $2
+        ORDER BY c.data_lancamento ASC, c.id_caixa ASC
+      `, [dataInicio, dataFim]);
+
+      let saldo = opening.saldo;
+      let totalCreditos = 0;
+      let totalDebitos = 0;
+      const rows = result.rows.map((row: any) => {
+        const value = parseFloat(row.valor);
+        if (row.natureza === 'C') {
+          saldo += value;
+          totalCreditos += value;
+        } else {
+          saldo -= value;
+          totalDebitos += value;
+        }
+        return { ...row, saldo_acumulado: saldo };
+      });
+
+      res.json({
+        dataInicio,
+        dataFim,
+        dataSaldoInicial: openingDate,
+        saldoInicial: opening.saldo,
+        saldoFinal: saldo,
+        totalCreditos,
+        totalDebitos,
+        rows
+      });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
     }

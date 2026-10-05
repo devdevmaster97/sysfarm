@@ -57,6 +57,25 @@ interface Expense {
   valor: number;
   natureza: 'D' | 'C';
   id_categoria_caixa: number;
+  id_banco?: number | null;
+  usuario_nome?: string;
+  encerra_mes?: boolean;
+  data_saldo_mes?: string;
+  saldo_fim_mes?: number | null;
+  saldo_configurado?: boolean;
+}
+
+interface BankBalanceData {
+  configured: boolean;
+  saldo: number;
+  dataReferencia: string | null;
+  saldoReferencia: number;
+  dataSaldo: string;
+  history: Array<{
+    id_saldo: number;
+    data_referencia: string;
+    saldo: number;
+  }>;
 }
 
 interface ExpenseFiltersType {
@@ -572,6 +591,13 @@ export default function App() {
             )}
             {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
             {activeTab === 'reports' && <ReportsHub categories={categories} />}
+            {activeTab === 'settings' && (
+              <BankBalanceSettings
+                currentUserId={user.id_usuario}
+                banks={banks}
+                isReadonly={isReadonly}
+              />
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -1210,6 +1236,28 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
                         </motion.tr>
                       )}
                     </AnimatePresence>
+                    {expense.encerra_mes && expense.saldo_configurado && expense.saldo_fim_mes !== null && (
+                      <tr className="border-y-2 border-farm-green/20 dark:border-white/10 bg-farm-cream/60 dark:bg-white/10">
+                        <td className="px-3 py-4 text-center">
+                          <Wallet size={16} className="mx-auto text-farm-green dark:text-[#e5e5d0]" />
+                        </td>
+                        <td className="px-4 py-4 text-sm font-bold whitespace-nowrap">
+                          {formatDate(expense.data_saldo_mes || expense.data_lancamento)}
+                        </td>
+                        <td colSpan={2} className="px-4 py-4 text-sm font-black uppercase tracking-wide">
+                          Saldo dos Bancos
+                        </td>
+                        <td className={`px-4 py-4 text-right font-black whitespace-nowrap ${
+                          Number(expense.saldo_fim_mes) >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                        }`}>
+                          {formatCurrency(Math.abs(Number(expense.saldo_fim_mes)))}
+                        </td>
+                        <td className="px-4 py-4 text-xs font-black text-farm-green/60 dark:text-[#e5e5d0]/70">
+                          {Number(expense.saldo_fim_mes) >= 0 ? 'CRÉDITO' : 'DÉBITO'}
+                        </td>
+                        <td />
+                      </tr>
+                    )}
                   </React.Fragment>
                 );
               })}
@@ -1605,6 +1653,27 @@ const addPdfPageNumbers = (doc: jsPDF) => {
 
 type PreparedPdf = { bytes: Uint8Array; filename: string; title: string; file: File };
 
+type BankStatementData = {
+  dataInicio: string;
+  dataFim: string;
+  dataSaldoInicial: string;
+  saldoInicial: number;
+  saldoFinal: number;
+  totalCreditos: number;
+  totalDebitos: number;
+  rows: Array<{
+    id_caixa: number;
+    data_lancamento: string;
+    natureza: 'C' | 'D';
+    historico: string;
+    valor: number;
+    categoria: string;
+    id_banco: number;
+    banco_nome: string;
+    saldo_acumulado: number;
+  }>;
+};
+
 function copyPdfBytes(bytes: Uint8Array) {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -1965,6 +2034,69 @@ function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: st
   return pdfFileFromDoc(doc, `movimentos-${data.dataInicio}-a-${data.dataFim}.pdf`, 'Movimentos por Data');
 }
 
+function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
+  const body: unknown[][] = [[
+    '',
+    pdfDate(data.dataInicio),
+    'SALDO DOS BANCOS',
+    '',
+    '',
+    '',
+    `${data.saldoInicial >= 0 ? 'C' : 'D'} R$ ${pdfMoney(data.saldoInicial)}`
+  ]];
+
+  data.rows.forEach(row => {
+    body.push([
+      row.natureza,
+      pdfDate(row.data_lancamento),
+      row.historico || '',
+      row.categoria || 'Sem categoria',
+      row.banco_nome || row.id_banco || '—',
+      `R$ ${pdfMoney(Number(row.valor))}`,
+      `${Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ ${pdfMoney(Number(row.saldo_acumulado))}`
+    ]);
+  });
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  addPdfHeader(
+    doc,
+    'EXTRATO BANCÁRIO',
+    `Período: ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · Saldo inicial em ${pdfDate(data.dataSaldoInicial)}`
+  );
+  autoTable(doc, {
+    startY: 29,
+    head: [['D/C', 'Data', 'Histórico', 'Categoria', 'Banco', 'Valor', 'Saldo']],
+    body,
+    foot: [[
+      '',
+      '',
+      'TOTAIS',
+      `Créditos: R$ ${pdfMoney(data.totalCreditos)}`,
+      `Débitos: R$ ${pdfMoney(data.totalDebitos)}`,
+      '',
+      `${data.saldoFinal >= 0 ? 'C' : 'D'} R$ ${pdfMoney(data.saldoFinal)}`
+    ]],
+    theme: 'grid',
+    headStyles: { fillColor: [90, 90, 64], textColor: 255 },
+    footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
+    styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 62 },
+      4: { cellWidth: 34 },
+      5: { halign: 'right', cellWidth: 27 },
+      6: { halign: 'right', cellWidth: 34 }
+    },
+    margin: { left: 10, right: 10, bottom: 14 }
+  });
+  return pdfFileFromDoc(
+    doc,
+    `extrato-bancario-${data.dataInicio}-a-${data.dataFim}.pdf`,
+    'Extrato Bancário'
+  );
+}
+
 function buildCategoriaPdf(params: {
   data: { dataInicio: string; dataFim: string };
   visualizacao: 'detalhado' | 'resumo' | 'debitos' | 'creditos';
@@ -2192,18 +2324,19 @@ function MonthYearSelects({
 }
 
 function ReportsHub({ categories }: { categories: Category[] }) {
-  const [selected, setSelected] = useState<'fechamento' | 'movimentos' | 'categorias'>('fechamento');
+  const [selected, setSelected] = useState<'fechamento' | 'movimentos' | 'categorias' | 'extrato'>('fechamento');
   const tabs = [
     { id: 'fechamento',  label: 'Fechamento do Caixa' },
     { id: 'movimentos',  label: 'Movimentos por Data' },
     { id: 'categorias',  label: 'Movimentos por Categoria' },
+    { id: 'extrato', label: 'Extrato Bancário' },
   ] as const;
   return (
     <div className="space-y-6">
       <div
         role="tablist"
         aria-label="Tipos de relatório"
-        className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-3xl bg-white dark:bg-[#1a1a11] border border-farm-green/5 dark:border-white/5 p-2 shadow-sm"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 rounded-3xl bg-white dark:bg-[#1a1a11] border border-farm-green/5 dark:border-white/5 p-2 shadow-sm"
       >
         {tabs.map(t => (
           <button
@@ -2225,6 +2358,7 @@ function ReportsHub({ categories }: { categories: Category[] }) {
       {selected === 'fechamento' && <FechamentoCaixa />}
       {selected === 'movimentos' && <MovimentosPeriodo />}
       {selected === 'categorias' && <MovimentosPorCategoria categories={categories} />}
+      {selected === 'extrato' && <ExtratoBancario />}
     </div>
   );
 }
@@ -2720,6 +2854,262 @@ function MovimentosPeriodo() {
                         {row.saldoAcum >= 0 ? 'C' : 'D'}
                       </td>
                       <td className="px-4 py-2.5 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+}
+
+function ExtratoBancario() {
+  const now = new Date();
+  const firstDay = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
+  const [dateMode, setDateMode] = useState<'periodo' | 'mes'>('mes');
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const [ano, setAno] = useState(now.getFullYear());
+  const [dataInicio, setDataInicio] = useState(firstDay);
+  const [dataFim, setDataFim] = useState(monthBounds(now.getFullYear(), now.getMonth() + 1).dataFim);
+  const [data, setData] = useState<BankStatementData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [pdfReady, setPdfReady] = useState(false);
+  const pdfRef = useRef<PreparedPdf | null>(null);
+  const actionsRef = useScrollToReportActions(data);
+
+  const fmt = (value: number) =>
+    Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtBR = (iso: string) => pdfDate(iso);
+
+  useEffect(() => {
+    if (!data) {
+      pdfRef.current = null;
+      setPdfReady(false);
+      return;
+    }
+    pdfRef.current = buildBankStatementPdf(data);
+    setPdfReady(true);
+  }, [data]);
+
+  const applyMonth = (month: number, year: number) => {
+    const bounds = monthBounds(year, month);
+    setMes(month);
+    setAno(year);
+    setDataInicio(bounds.dataInicio);
+    setDataFim(bounds.dataFim);
+  };
+
+  const changeDateMode = (mode: 'periodo' | 'mes') => {
+    setDateMode(mode);
+    if (mode === 'mes') applyMonth(mes, ano);
+  };
+
+  const buscar = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ dataInicio, dataFim });
+      const response = await fetch(`${API_URL}/api/reports/extrato-bancario?${params}`, {
+        credentials: 'include'
+      });
+      const json = await response.json();
+      if (!response.ok || json.status === 'error') {
+        setData(null);
+        setError(json.message || json.detail || 'Não foi possível gerar o extrato.');
+      } else {
+        setData(json);
+      }
+    } catch {
+      setData(null);
+      setError('Erro de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const imprimir = () => {
+    if (!data) return;
+    const opening = Number(data.saldoInicial);
+    const openingColor = opening >= 0 ? '#16a34a' : '#dc2626';
+    const openingRow = `
+      <tr style="background:#f5f5f0;border-bottom:2px solid #ccc">
+        <td></td>
+        <td style="padding:7px 6px">${fmtBR(data.dataInicio)}</td>
+        <td colspan="3" style="padding:7px 6px;font-weight:900">SALDO DOS BANCOS</td>
+        <td></td>
+        <td style="padding:7px 6px;text-align:right;font-weight:900;color:${openingColor}">
+          ${opening >= 0 ? 'C' : 'D'} ${fmt(opening)}
+        </td>
+      </tr>`;
+    const rows = data.rows.map(row => {
+      const balance = Number(row.saldo_acumulado);
+      const value = Number(row.valor);
+      const natureColor = row.natureza === 'C' ? '#16a34a' : '#dc2626';
+      const balanceColor = balance >= 0 ? '#16a34a' : '#dc2626';
+      return `
+        <tr style="border-bottom:1px solid #eee">
+          <td style="padding:5px 6px;font-weight:900;color:${natureColor}">${row.natureza}</td>
+          <td style="padding:5px 6px;white-space:nowrap">${fmtBR(row.data_lancamento)}</td>
+          <td style="padding:5px 6px;font-weight:700">${row.historico}</td>
+          <td style="padding:5px 6px;color:#666">${row.categoria}</td>
+          <td style="padding:5px 6px;color:#666">${row.banco_nome}</td>
+          <td style="padding:5px 6px;text-align:right;color:${natureColor}">${fmt(value)}</td>
+          <td style="padding:5px 6px;text-align:right;font-weight:900;color:${balanceColor}">
+            ${balance >= 0 ? 'C' : 'D'} ${fmt(balance)}
+          </td>
+        </tr>`;
+    }).join('');
+
+    printHtml(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>Extrato Bancário</title>
+      <style>
+        *{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:24px}
+        h2{font-size:18px;margin:0 0 3px}.sub{color:#666;margin:0 0 16px}
+        table{width:100%;border-collapse:collapse}thead{background:#f5f5f0;border-bottom:2px solid #aaa}
+        th{padding:6px;text-align:left;text-transform:uppercase;font-size:9px;color:#666}
+        tfoot{background:#f5f5f0;border-top:2px solid #333}tfoot td{padding:8px 6px;font-weight:900}
+        @page{margin:1.3cm;size:A4 landscape}
+      </style>
+    </head><body>
+      <h2>EXTRATO BANCÁRIO</h2>
+      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)}</p>
+      <table>
+        <thead><tr><th>D/C</th><th>Data</th><th>Histórico</th><th>Categoria</th><th>Banco</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody>${openingRow}${rows}</tbody>
+        <tfoot><tr>
+          <td colspan="2">TOTAIS</td>
+          <td style="color:#16a34a">Créditos: R$ ${fmt(data.totalCreditos)}</td>
+          <td style="color:#dc2626">Débitos: R$ ${fmt(data.totalDebitos)}</td>
+          <td colspan="2">SALDO FINAL</td>
+          <td style="text-align:right;color:${Number(data.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
+            ${Number(data.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(data.saldoFinal)}
+          </td>
+        </tr></tfoot>
+      </table>
+    </body></html>`);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-4 sm:p-6 flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 sm:items-end">
+        <div className="w-full">
+          <DateModeSwitch mode={dateMode} onChange={changeDateMode} />
+        </div>
+        {dateMode === 'periodo' ? (
+          <>
+            <div className="w-full sm:flex-1 lg:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Inicial</label>
+              <input type="date" value={dataInicio} onChange={event => setDataInicio(event.target.value)} className={DATE_FIELD_CLASS} />
+            </div>
+            <div className="w-full sm:flex-1 lg:flex-none">
+              <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Data Final</label>
+              <input type="date" value={dataFim} onChange={event => setDataFim(event.target.value)} className={DATE_FIELD_CLASS} />
+            </div>
+          </>
+        ) : (
+          <MonthYearSelects month={mes} year={ano} onChange={applyMonth} />
+        )}
+        <button
+          type="button"
+          onClick={buscar}
+          disabled={loading}
+          className="w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+        >
+          <FileText size={18} />
+          {loading ? 'Calculando...' : 'Gerar Extrato'}
+        </button>
+        {data && (
+          <>
+            <button
+              ref={actionsRef}
+              type="button"
+              onClick={imprimir}
+              className="scroll-mt-20 w-full sm:w-auto min-h-12 sm:min-h-0 px-6 py-3 sm:py-2.5 border-2 border-farm-green/20 text-farm-green dark:text-[#e5e5d0] rounded-xl font-bold hover:bg-farm-cream dark:hover:bg-white/5 transition-colors flex items-center justify-center gap-2"
+            >
+              <Printer size={18} />Imprimir
+            </button>
+            <DownloadPdfButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
+            <ShareReportButton pdfRef={pdfRef} ready={pdfReady} onError={setError} />
+          </>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">
+          {error}
+        </div>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              ['Saldo inicial', data.saldoInicial, 'balance'],
+              ['Total de créditos', data.totalCreditos, 'credit'],
+              ['Total de débitos', data.totalDebitos, 'debit'],
+              ['Saldo final', data.saldoFinal, 'balance']
+            ].map(([label, value, kind]) => (
+              <div key={String(label)} className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
+                <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">{String(label)}</p>
+                <p className={`text-xl font-black ${
+                  kind === 'credit' || (kind === 'balance' && Number(value) >= 0)
+                    ? 'text-emerald-600'
+                    : 'text-rose-600'
+                }`}>
+                  {Number(value) < 0 ? '- ' : ''}R$ {fmt(Number(value))}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+            <div className="px-6 py-4 border-b border-farm-green/10 dark:border-white/5 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="font-serif text-lg font-bold dark:text-[#e5e5d0]">Extrato Bancário</h3>
+                <p className="text-xs text-farm-green/50 dark:text-[#e5e5d0]/60 mt-1">
+                  {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}
+                </p>
+              </div>
+              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">{data.rows.length} lançamentos</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[900px]">
+                <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
+                  <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
+                    <th className="px-4 py-3">D/C</th>
+                    <th className="px-4 py-3">Data</th>
+                    <th className="px-4 py-3">Histórico</th>
+                    <th className="px-4 py-3">Categoria</th>
+                    <th className="px-4 py-3">Banco</th>
+                    <th className="px-4 py-3 text-right">Valor</th>
+                    <th className="px-4 py-3 text-right">Saldo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
+                  <tr className="bg-farm-cream/60 dark:bg-white/10 border-b-2 border-farm-green/20">
+                    <td className="px-4 py-3" />
+                    <td className="px-4 py-3 text-sm font-bold whitespace-nowrap">{fmtBR(data.dataInicio)}</td>
+                    <td colSpan={4} className="px-4 py-3 text-sm font-black uppercase tracking-wide">Saldo dos Bancos</td>
+                    <td className={`px-4 py-3 text-right font-black ${Number(data.saldoInicial) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {Number(data.saldoInicial) >= 0 ? 'C' : 'D'} R$ {fmt(data.saldoInicial)}
+                    </td>
+                  </tr>
+                  {data.rows.map(row => (
+                    <tr key={row.id_caixa} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 text-sm">
+                      <td className={`px-4 py-2.5 font-black ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
+                      <td className="px-4 py-2.5 font-bold uppercase max-w-xs truncate">{row.historico}</td>
+                      <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.categoria}</td>
+                      <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.banco_nome}</td>
+                      <td className={`px-4 py-2.5 text-right font-bold ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>R$ {fmt(row.valor)}</td>
+                      <td className={`px-4 py-2.5 text-right font-black whitespace-nowrap ${Number(row.saldo_acumulado) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ {fmt(row.saldo_acumulado)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -3369,6 +3759,241 @@ function ConfirmDeleteModal({ isOpen, onConfirm, onCancel }: {
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+function BankBalanceSettings({
+  currentUserId,
+  banks,
+  isReadonly
+}: {
+  currentUserId: number;
+  banks: BankRow[];
+  isReadonly?: boolean;
+}) {
+  const today = new Date().toISOString().split('T')[0];
+  const [data, setData] = useState<BankBalanceData | null>(null);
+  const [referenceDate, setReferenceDate] = useState(today);
+  const [balanceInput, setBalanceInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: ToastType } | null>(null);
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value));
+  const formatDate = (value: string) => pdfDate(value);
+
+  const parseBalance = (value: string) => {
+    const cleaned = value.replace(/[R$\s]/g, '');
+    const normalized = cleaned.includes(',')
+      ? cleaned.replace(/\./g, '').replace(',', '.')
+      : cleaned;
+    return Number(normalized);
+  };
+
+  const loadBalance = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/bank-balance`, { credentials: 'include' });
+      const json = await response.json();
+      if (!response.ok || json.status === 'error') {
+        setMessage({ text: json.message || 'Não foi possível carregar o saldo.', type: 'error' });
+        return;
+      }
+      setData(json);
+      if (json.configured && json.dataReferencia) {
+        setReferenceDate(String(json.dataReferencia).split('T')[0]);
+        setBalanceInput(Number(json.saldoReferencia).toFixed(2).replace('.', ','));
+      }
+    } catch {
+      setMessage({ text: 'Erro de conexão ao carregar o saldo bancário.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBalance();
+  }, []);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const balance = parseBalance(balanceInput);
+    if (!referenceDate || !Number.isFinite(balance)) {
+      setMessage({ text: 'Informe uma data e um saldo válidos.', type: 'error' });
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_URL}/api/bank-balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          data_referencia: referenceDate,
+          saldo: balance,
+          id_usuario: currentUserId
+        })
+      });
+      const json = await response.json();
+      if (!response.ok || json.status === 'error') {
+        setMessage({ text: json.message || 'Não foi possível salvar o saldo.', type: 'error' });
+        return;
+      }
+      setMessage({ text: 'Saldo bancário salvo. Os extratos e fechamentos mensais foram recalculados.', type: 'success' });
+      await loadBalance();
+    } catch {
+      setMessage({ text: 'Erro de conexão ao salvar o saldo bancário.', type: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form
+          onSubmit={save}
+          className="lg:col-span-2 bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden"
+        >
+          <div className="bg-farm-green dark:bg-[#2a2a1c] text-farm-cream px-6 py-5 flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-farm-cream/15"><Wallet size={22} /></div>
+            <div>
+              <h3 className="font-serif text-xl font-bold">Saldo bancário atual</h3>
+              <p className="text-xs text-farm-cream/70 mt-0.5">Soma consolidada de todas as contas bancárias</p>
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            <div className="rounded-2xl bg-farm-cream/60 dark:bg-white/5 border border-farm-green/10 dark:border-white/10 p-4">
+              <p className="text-sm font-bold text-farm-green dark:text-[#e5e5d0]">
+                Bancos incluídos: {banks.length}
+              </p>
+              <p className="text-xs text-farm-green/60 dark:text-[#e5e5d0]/60 mt-1">
+                {banks.map(bank => bank.nome).join(' · ') || 'Nenhum banco cadastrado'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
+                  Data de referência
+                </label>
+                <input
+                  type="date"
+                  value={referenceDate}
+                  onChange={event => setReferenceDate(event.target.value)}
+                  disabled={isReadonly}
+                  className={DATE_FIELD_CLASS}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">
+                  Saldo total dos bancos
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-farm-green/50">R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={balanceInput}
+                    onChange={event => setBalanceInput(event.target.value)}
+                    disabled={isReadonly}
+                    placeholder="0,00"
+                    className={`${DATE_FIELD_CLASS} pl-12`}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs leading-relaxed text-farm-green/60 dark:text-[#e5e5d0]/60">
+              Informe o saldo consolidado no final da data escolhida. O sistema usa esse valor como referência e soma créditos ou subtrai débitos para calcular os demais dias e meses.
+            </p>
+
+            {message && (
+              <div className={`rounded-2xl px-4 py-3 text-sm font-bold ${
+                message.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-600 border border-rose-200'
+              }`}>
+                {message.text}
+              </div>
+            )}
+
+            {!isReadonly && (
+              <button
+                type="submit"
+                disabled={saving || loading}
+                className="w-full sm:w-auto min-h-12 px-6 py-3 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Check size={18} />
+                {saving ? 'Salvando...' : 'Salvar saldo atual'}
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 p-6 flex flex-col">
+          <div className="p-3 bg-farm-cream dark:bg-white/10 rounded-2xl w-fit">
+            <PiggyBank size={24} className="text-farm-green dark:text-[#e5e5d0]" />
+          </div>
+          <p className="mt-5 text-xs font-bold uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
+            Saldo calculado hoje
+          </p>
+          {loading ? (
+            <p className="mt-2 text-sm text-farm-green/50">Carregando...</p>
+          ) : data?.configured ? (
+            <>
+              <p className={`mt-2 text-3xl font-serif font-black ${Number(data.saldo) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                {formatCurrency(Number(data.saldo))}
+              </p>
+              <p className="mt-3 text-xs text-farm-green/50 dark:text-[#e5e5d0]/60">
+                Calculado para {formatDate(data.dataSaldo)} a partir da referência de {formatDate(data.dataReferencia!)}.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-sm font-medium text-farm-green/50 dark:text-[#e5e5d0]/60">
+              Cadastre o primeiro saldo para ativar os fechamentos e o extrato.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {data?.history && data.history.length > 0 && (
+        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
+          <div className="px-6 py-4 border-b border-farm-green/10 dark:border-white/5">
+            <h3 className="font-serif text-lg font-bold">Histórico de referências</h3>
+            <p className="text-xs text-farm-green/50 dark:text-[#e5e5d0]/60 mt-1">
+              Uma nova data preserva os saldos já informados; salvar na mesma data atualiza o valor.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px]">
+              <thead className="bg-farm-cream/50 dark:bg-white/5">
+                <tr className="text-left text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
+                  <th className="px-6 py-3">Data de referência</th>
+                  <th className="px-6 py-3 text-right">Saldo informado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
+                {data.history.map(item => (
+                  <tr key={item.id_saldo}>
+                    <td className="px-6 py-3 text-sm font-bold">{formatDate(item.data_referencia)}</td>
+                    <td className={`px-6 py-3 text-right font-black ${Number(item.saldo) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {formatCurrency(Number(item.saldo))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </motion.div>
   );
 }
 
