@@ -71,11 +71,6 @@ interface BankBalanceData {
   dataReferencia: string | null;
   saldoReferencia: number;
   dataSaldo: string;
-  history: Array<{
-    id_saldo: number;
-    data_referencia: string;
-    saldo: number;
-  }>;
 }
 
 interface ExpenseFiltersType {
@@ -3818,6 +3813,13 @@ function BankBalanceSettings({
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (data?.configured) {
+      setMessage({
+        text: 'O saldo inicial já foi informado. Os próximos saldos são calculados automaticamente.',
+        type: 'error'
+      });
+      return;
+    }
     const balance = parseBalance(balanceInput);
     if (!referenceDate || !Number.isFinite(balance)) {
       setMessage({ text: 'Informe uma data e um saldo válidos.', type: 'error' });
@@ -3842,7 +3844,7 @@ function BankBalanceSettings({
         setMessage({ text: json.message || 'Não foi possível salvar o saldo.', type: 'error' });
         return;
       }
-      setMessage({ text: 'Saldo bancário salvo. Os extratos e fechamentos mensais foram recalculados.', type: 'success' });
+      setMessage({ text: 'Saldo inicial salvo. A partir de agora, os próximos saldos serão calculados automaticamente.', type: 'success' });
       await loadBalance();
     } catch {
       setMessage({ text: 'Erro de conexão ao salvar o saldo bancário.', type: 'error' });
@@ -3861,8 +3863,8 @@ function BankBalanceSettings({
           <div className="bg-farm-green dark:bg-[#2a2a1c] text-farm-cream px-6 py-5 flex items-center gap-3">
             <div className="p-2 rounded-xl bg-farm-cream/15"><Wallet size={22} /></div>
             <div>
-              <h3 className="font-serif text-xl font-bold">Saldo bancário atual</h3>
-              <p className="text-xs text-farm-cream/70 mt-0.5">Soma consolidada de todas as contas bancárias</p>
+              <h3 className="font-serif text-xl font-bold">Saldo bancário inicial</h3>
+              <p className="text-xs text-farm-cream/70 mt-0.5">Cadastro único da soma consolidada das contas</p>
             </div>
           </div>
 
@@ -3885,7 +3887,7 @@ function BankBalanceSettings({
                   type="date"
                   value={referenceDate}
                   onChange={event => setReferenceDate(event.target.value)}
-                  disabled={isReadonly}
+                  disabled={isReadonly || !!data?.configured}
                   className={DATE_FIELD_CLASS}
                   required
                 />
@@ -3901,7 +3903,7 @@ function BankBalanceSettings({
                     inputMode="decimal"
                     value={balanceInput}
                     onChange={event => setBalanceInput(event.target.value)}
-                    disabled={isReadonly}
+                    disabled={isReadonly || !!data?.configured}
                     placeholder="0,00"
                     className={`${DATE_FIELD_CLASS} pl-12`}
                     required
@@ -3910,9 +3912,18 @@ function BankBalanceSettings({
               </div>
             </div>
 
-            <p className="text-xs leading-relaxed text-farm-green/60 dark:text-[#e5e5d0]/60">
-              Informe o saldo consolidado no final da data escolhida. O sistema usa esse valor como referência e soma créditos ou subtrai débitos para calcular os demais dias e meses.
-            </p>
+            {data?.configured ? (
+              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-4 py-3">
+                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Cadastro inicial concluído</p>
+                <p className="text-xs leading-relaxed text-emerald-700/75 dark:text-emerald-300/75 mt-1">
+                  Não é necessário alterar este valor. Cada crédito aumenta o saldo e cada débito reduz o saldo automaticamente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs leading-relaxed text-farm-green/60 dark:text-[#e5e5d0]/60">
+                Informe somente uma vez o saldo consolidado no final da data escolhida. O sistema usará esse valor como referência permanente.
+              </p>
+            )}
 
             {message && (
               <div className={`rounded-2xl px-4 py-3 text-sm font-bold ${
@@ -3924,14 +3935,14 @@ function BankBalanceSettings({
               </div>
             )}
 
-            {!isReadonly && (
+            {!isReadonly && !data?.configured && (
               <button
                 type="submit"
                 disabled={saving || loading}
                 className="w-full sm:w-auto min-h-12 px-6 py-3 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <Check size={18} />
-                {saving ? 'Salvando...' : 'Salvar saldo atual'}
+                {saving ? 'Salvando...' : 'Cadastrar saldo inicial'}
               </button>
             )}
           </div>
@@ -3963,36 +3974,6 @@ function BankBalanceSettings({
         </div>
       </div>
 
-      {data?.history && data.history.length > 0 && (
-        <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
-          <div className="px-6 py-4 border-b border-farm-green/10 dark:border-white/5">
-            <h3 className="font-serif text-lg font-bold">Histórico de referências</h3>
-            <p className="text-xs text-farm-green/50 dark:text-[#e5e5d0]/60 mt-1">
-              Uma nova data preserva os saldos já informados; salvar na mesma data atualiza o valor.
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px]">
-              <thead className="bg-farm-cream/50 dark:bg-white/5">
-                <tr className="text-left text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
-                  <th className="px-6 py-3">Data de referência</th>
-                  <th className="px-6 py-3 text-right">Saldo informado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
-                {data.history.map(item => (
-                  <tr key={item.id_saldo}>
-                    <td className="px-6 py-3 text-sm font-bold">{formatDate(item.data_referencia)}</td>
-                    <td className={`px-6 py-3 text-right font-black ${Number(item.saldo) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {formatCurrency(Number(item.saldo))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </motion.div>
   );
 }

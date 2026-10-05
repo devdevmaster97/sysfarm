@@ -34,9 +34,18 @@ async function startServer() {
       data_referencia DATE NOT NULL UNIQUE,
       saldo NUMERIC(15, 2) NOT NULL,
       id_usuario INTEGER,
+      registro_unico BOOLEAN NOT NULL DEFAULT TRUE,
       criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+  await pool.query(`
+    ALTER TABLE saldo_bancario
+      ADD COLUMN IF NOT EXISTS registro_unico BOOLEAN NOT NULL DEFAULT TRUE
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_saldo_bancario_registro_unico
+      ON saldo_bancario (registro_unico)
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_saldo_bancario_data
@@ -63,10 +72,8 @@ async function startServer() {
       WITH referencia AS (
         SELECT data_referencia, saldo
         FROM saldo_bancario
-        ORDER BY
-          CASE WHEN data_referencia <= $1::date THEN 0 ELSE 1 END,
-          CASE WHEN data_referencia <= $1::date THEN data_referencia END DESC,
-          CASE WHEN data_referencia > $1::date THEN data_referencia END ASC
+        WHERE registro_unico = TRUE
+        ORDER BY id_saldo ASC
         LIMIT 1
       ),
       ajuste AS (
@@ -241,13 +248,7 @@ async function startServer() {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const current = await getBankBalanceAtDate(today);
-      const history = await pool.query(`
-        SELECT id_saldo, data_referencia, saldo, id_usuario, criado_em, atualizado_em
-        FROM saldo_bancario
-        ORDER BY data_referencia DESC, id_saldo DESC
-        LIMIT 12
-      `);
-      res.json({ ...current, dataSaldo: today, history: history.rows });
+      res.json({ ...current, dataSaldo: today });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
     }
@@ -265,14 +266,18 @@ async function startServer() {
       }
 
       const result = await pool.query(`
-        INSERT INTO saldo_bancario (data_referencia, saldo, id_usuario)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (data_referencia) DO UPDATE SET
-          saldo = EXCLUDED.saldo,
-          id_usuario = EXCLUDED.id_usuario,
-          atualizado_em = NOW()
+        INSERT INTO saldo_bancario (data_referencia, saldo, id_usuario, registro_unico)
+        VALUES ($1, $2, $3, TRUE)
+        ON CONFLICT (registro_unico) DO NOTHING
         RETURNING *
       `, [data_referencia, saldoNumber, id_usuario || null]);
+
+      if (result.rows.length === 0) {
+        return res.status(409).json({
+          status: "error",
+          message: "O saldo bancário inicial já foi informado. Os próximos saldos são calculados automaticamente pelos lançamentos."
+        });
+      }
 
       res.status(201).json({ status: "success", data: result.rows[0] });
     } catch (err) {
