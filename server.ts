@@ -329,8 +329,29 @@ async function startServer() {
       const params: any[] = [];
       let paramCount = 1;
 
-      if (startDate) { whereClause += ` AND c.data_lancamento >= $${paramCount++}`; params.push(startDate); }
-      if (endDate)   { whereClause += ` AND c.data_lancamento <= $${paramCount++}`; params.push(endDate); }
+      const startDateValue = startDate ? String(startDate) : '';
+      const endDateValue = endDate ? String(endDate) : '';
+      if (startDateValue && !isIsoDate(startDateValue)) {
+        return res.status(400).json({ status: "error", message: "Data inicial inválida." });
+      }
+      if (endDateValue && !isIsoDate(endDateValue)) {
+        return res.status(400).json({ status: "error", message: "Data final inválida." });
+      }
+      if (startDateValue && endDateValue && startDateValue > endDateValue) {
+        return res.status(400).json({
+          status: "error",
+          message: "A data inicial não pode ser posterior à data final."
+        });
+      }
+
+      if (startDateValue) {
+        whereClause += ` AND c.data_lancamento::date >= $${paramCount++}::date`;
+        params.push(startDateValue);
+      }
+      if (endDateValue) {
+        whereClause += ` AND c.data_lancamento::date <= $${paramCount++}::date`;
+        params.push(endDateValue);
+      }
       if (categoria) { whereClause += ` AND c.id_categoria_caixa = $${paramCount++}`; params.push(categoria); }
       if (natureza)  { whereClause += ` AND c.natureza = $${paramCount++}`; params.push(natureza); }
       if (historico) { whereClause += ` AND c.historico ILIKE $${paramCount++}`; params.push(`%${historico}%`); }

@@ -252,6 +252,7 @@ export default function App() {
   const [banks, setBanks] = useState<{ id_banco: number; nome: string; numero_agencia: string; numero_conta: string; cidade: string }[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [expensesLoading, setExpensesLoading] = useState(false);
+  const [expenseLoadError, setExpenseLoadError] = useState('');
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
@@ -294,6 +295,7 @@ export default function App() {
 
   const fetchTransactions = async (page = 1) => {
     setExpensesLoading(true);
+    setExpenseLoadError('');
     try {
       const qs = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (expenseFilters.startDate) qs.set('startDate', expenseFilters.startDate);
@@ -303,14 +305,21 @@ export default function App() {
       if (expenseFilters.valor.trim())  qs.set('valor', expenseFilters.valor.trim());
       if (expenseFilters.usuario.trim()) qs.set('usuario', expenseFilters.usuario.trim());
       const res = await fetch(`${API_URL}/api/transactions?${qs.toString()}`, { credentials: 'include' });
+      const json = await res.json().catch(() => null);
       if (res.ok) {
-        const json = await res.json();
-        setExpenses(json.data ?? json);
-        setTotalPages(json.totalPages ?? 1);
-        setTotalRecords(json.total ?? 0);
+        const payload = json ?? {};
+        setExpenses(Array.isArray(payload) ? payload : (payload.data ?? []));
+        setTotalPages(Array.isArray(payload) ? 1 : (payload.totalPages ?? 1));
+        setTotalRecords(Array.isArray(payload) ? payload.length : (payload.total ?? 0));
+      } else {
+        setExpenses([]);
+        setTotalPages(1);
+        setTotalRecords(0);
+        setExpenseLoadError(json?.message || 'Não foi possível filtrar os lançamentos.');
       }
     } catch (err) {
       console.error("Erro ao buscar lançamentos.");
+      setExpenseLoadError('Erro de conexão ao buscar os lançamentos.');
     } finally {
       setExpensesLoading(false);
     }
@@ -566,6 +575,11 @@ export default function App() {
                 onChange={handleExpenseFiltersChange}
                 banks={banks}
               />
+              {expenseLoadError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">
+                  {expenseLoadError}
+                </div>
+              )}
               <ExpenseList
                 expenses={expenses}
                 categories={categories}
@@ -972,6 +986,7 @@ function ExpenseFilterBar({ filters, onChange, banks }: {
           <input
             type="date"
             value={filters.startDate}
+            max={filters.endDate || undefined}
             onChange={(e) => set('startDate', e.target.value)}
             className={inputClass}
           />
@@ -981,6 +996,7 @@ function ExpenseFilterBar({ filters, onChange, banks }: {
           <input
             type="date"
             value={filters.endDate}
+            min={filters.startDate || undefined}
             onChange={(e) => set('endDate', e.target.value)}
             className={inputClass}
           />
@@ -2870,6 +2886,7 @@ function ExtratoBancario() {
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(monthBounds(now.getFullYear(), now.getMonth() + 1).dataFim);
   const [data, setData] = useState<BankStatementData | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
@@ -2880,15 +2897,42 @@ function ExtratoBancario() {
     Math.abs(Number(value)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => pdfDate(iso);
 
+  const statementView = React.useMemo(() => {
+    if (!data) return null;
+    let balance = Number(data.saldoInicial);
+    let totalCredits = 0;
+    let totalDebits = 0;
+    const allRows = data.rows.map(row => {
+      const selected = selectedIds.has(row.id_caixa);
+      const value = Number(row.valor);
+      if (selected && row.natureza === 'C') {
+        balance += value;
+        totalCredits += value;
+      } else if (selected) {
+        balance -= value;
+        totalDebits += value;
+      }
+      return { ...row, saldo_acumulado: balance, selected };
+    });
+    const report: BankStatementData = {
+      ...data,
+      rows: allRows.filter(row => row.selected),
+      saldoFinal: balance,
+      totalCreditos: totalCredits,
+      totalDebitos: totalDebits
+    };
+    return { allRows, report };
+  }, [data, selectedIds]);
+
   useEffect(() => {
-    if (!data) {
+    if (!statementView) {
       pdfRef.current = null;
       setPdfReady(false);
       return;
     }
-    pdfRef.current = buildBankStatementPdf(data);
+    pdfRef.current = buildBankStatementPdf(statementView.report);
     setPdfReady(true);
-  }, [data]);
+  }, [statementView]);
 
   const applyMonth = (month: number, year: number) => {
     const bounds = monthBounds(year, month);
@@ -2914,33 +2958,54 @@ function ExtratoBancario() {
       const json = await response.json();
       if (!response.ok || json.status === 'error') {
         setData(null);
+        setSelectedIds(new Set());
         setError(json.message || json.detail || 'Não foi possível gerar o extrato.');
       } else {
         setData(json);
+        setSelectedIds(new Set((json.rows ?? []).map((row: any) => Number(row.id_caixa))));
       }
     } catch {
       setData(null);
+      setSelectedIds(new Set());
       setError('Erro de conexão com o servidor.');
     } finally {
       setLoading(false);
     }
   };
 
-  const imprimir = () => {
+  const toggleRow = (id: number) => {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = !!data?.rows.length && selectedIds.size === data.rows.length;
+  const toggleAll = () => {
     if (!data) return;
-    const opening = Number(data.saldoInicial);
+    setSelectedIds(allSelected
+      ? new Set()
+      : new Set(data.rows.map(row => row.id_caixa))
+    );
+  };
+
+  const imprimir = () => {
+    const reportData = statementView?.report;
+    if (!reportData) return;
+    const opening = Number(reportData.saldoInicial);
     const openingColor = opening >= 0 ? '#16a34a' : '#dc2626';
     const openingRow = `
       <tr style="background:#f5f5f0;border-bottom:2px solid #ccc">
         <td></td>
-        <td style="padding:7px 6px">${fmtBR(data.dataInicio)}</td>
+        <td style="padding:7px 6px">${fmtBR(reportData.dataInicio)}</td>
         <td colspan="3" style="padding:7px 6px;font-weight:900">SALDO DOS BANCOS</td>
         <td></td>
         <td style="padding:7px 6px;text-align:right;font-weight:900;color:${openingColor}">
           ${opening >= 0 ? 'C' : 'D'} ${fmt(opening)}
         </td>
       </tr>`;
-    const rows = data.rows.map(row => {
+    const rows = reportData.rows.map(row => {
       const balance = Number(row.saldo_acumulado);
       const value = Number(row.valor);
       const natureColor = row.natureza === 'C' ? '#16a34a' : '#dc2626';
@@ -2972,17 +3037,17 @@ function ExtratoBancario() {
       </style>
     </head><body>
       <h2>EXTRATO BANCÁRIO</h2>
-      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)}</p>
+      <p class="sub">Período: ${fmtBR(reportData.dataInicio)} a ${fmtBR(reportData.dataFim)} · ${reportData.rows.length} de ${data?.rows.length ?? 0} lançamentos incluídos</p>
       <table>
         <thead><tr><th>D/C</th><th>Data</th><th>Histórico</th><th>Categoria</th><th>Banco</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
         <tbody>${openingRow}${rows}</tbody>
         <tfoot><tr>
           <td colspan="2">TOTAIS</td>
-          <td style="color:#16a34a">Créditos: R$ ${fmt(data.totalCreditos)}</td>
-          <td style="color:#dc2626">Débitos: R$ ${fmt(data.totalDebitos)}</td>
+          <td style="color:#16a34a">Créditos: R$ ${fmt(reportData.totalCreditos)}</td>
+          <td style="color:#dc2626">Débitos: R$ ${fmt(reportData.totalDebitos)}</td>
           <td colspan="2">SALDO FINAL</td>
-          <td style="text-align:right;color:${Number(data.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
-            ${Number(data.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(data.saldoFinal)}
+          <td style="text-align:right;color:${Number(reportData.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
+            ${Number(reportData.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(reportData.saldoFinal)}
           </td>
         </tr></tfoot>
       </table>
@@ -3040,14 +3105,14 @@ function ExtratoBancario() {
         </div>
       )}
 
-      {data && (
+      {data && statementView && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {[
-              ['Saldo inicial', data.saldoInicial, 'balance'],
-              ['Total de créditos', data.totalCreditos, 'credit'],
-              ['Total de débitos', data.totalDebitos, 'debit'],
-              ['Saldo final', data.saldoFinal, 'balance']
+              ['Saldo inicial', statementView.report.saldoInicial, 'balance'],
+              ['Total de créditos', statementView.report.totalCreditos, 'credit'],
+              ['Total de débitos', statementView.report.totalDebitos, 'debit'],
+              ['Saldo final', statementView.report.saldoFinal, 'balance']
             ].map(([label, value, kind]) => (
               <div key={String(label)} className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
                 <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">{String(label)}</p>
@@ -3070,12 +3135,24 @@ function ExtratoBancario() {
                   {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}
                 </p>
               </div>
-              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">{data.rows.length} lançamentos</span>
+              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">
+                {selectedIds.size} de {data.rows.length} lançamentos incluídos
+              </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[900px]">
+              <table className="w-full text-left min-w-[940px]">
                 <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
                   <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
+                    <th className="px-4 py-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label={allSelected ? 'Desmarcar todos os lançamentos' : 'Marcar todos os lançamentos'}
+                        title={allSelected ? 'Desmarcar todos' : 'Marcar todos'}
+                        className="w-4 h-4 accent-farm-green cursor-pointer"
+                      />
+                    </th>
                     <th className="px-4 py-3">D/C</th>
                     <th className="px-4 py-3">Data</th>
                     <th className="px-4 py-3">Histórico</th>
@@ -3087,6 +3164,16 @@ function ExtratoBancario() {
                 </thead>
                 <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
                   <tr className="bg-farm-cream/60 dark:bg-white/10 border-b-2 border-farm-green/20">
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked
+                        disabled
+                        aria-label="Saldo inicial sempre incluído"
+                        title="O saldo inicial sempre é incluído"
+                        className="w-4 h-4 accent-farm-green"
+                      />
+                    </td>
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3 text-sm font-bold whitespace-nowrap">{fmtBR(data.dataInicio)}</td>
                     <td colSpan={4} className="px-4 py-3 text-sm font-black uppercase tracking-wide">Saldo dos Bancos</td>
@@ -3094,16 +3181,38 @@ function ExtratoBancario() {
                       {Number(data.saldoInicial) >= 0 ? 'C' : 'D'} R$ {fmt(data.saldoInicial)}
                     </td>
                   </tr>
-                  {data.rows.map(row => (
-                    <tr key={row.id_caixa} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 text-sm">
+                  {statementView.allRows.map(row => (
+                    <tr
+                      key={row.id_caixa}
+                      className={`text-sm transition-colors ${
+                        row.selected
+                          ? 'hover:bg-farm-cream/10 dark:hover:bg-white/5'
+                          : 'bg-slate-50/80 dark:bg-white/[0.02] opacity-55'
+                      }`}
+                    >
+                      <td className="px-4 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.selected}
+                          onChange={() => toggleRow(row.id_caixa)}
+                          aria-label={`${row.selected ? 'Ignorar' : 'Incluir'} lançamento ${row.historico}`}
+                          className="w-4 h-4 accent-farm-green cursor-pointer"
+                        />
+                      </td>
                       <td className={`px-4 py-2.5 font-black ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
-                      <td className="px-4 py-2.5 font-bold uppercase max-w-xs truncate">{row.historico}</td>
+                      <td className={`px-4 py-2.5 font-bold uppercase max-w-xs truncate ${row.selected ? '' : 'line-through'}`}>{row.historico}</td>
                       <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.categoria}</td>
                       <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.banco_nome}</td>
                       <td className={`px-4 py-2.5 text-right font-bold ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>R$ {fmt(row.valor)}</td>
-                      <td className={`px-4 py-2.5 text-right font-black whitespace-nowrap ${Number(row.saldo_acumulado) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ {fmt(row.saldo_acumulado)}
+                      <td className={`px-4 py-2.5 text-right font-black whitespace-nowrap ${
+                        row.selected
+                          ? Number(row.saldo_acumulado) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                          : 'text-slate-400'
+                      }`}>
+                        {row.selected
+                          ? `${Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ ${fmt(row.saldo_acumulado)}`
+                          : 'Ignorado'}
                       </td>
                     </tr>
                   ))}
