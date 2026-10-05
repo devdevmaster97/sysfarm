@@ -2685,7 +2685,8 @@ function MovimentosPeriodo() {
       }
       return { ...row, saldoAcum: balance, val: value, selected };
     });
-    const opening = typeof data.saldoInicial === 'number' ? Number(data.saldoInicial) : null;
+    const openingValue = data.saldoInicial == null ? null : Number(data.saldoInicial);
+    const opening = openingValue !== null && Number.isFinite(openingValue) ? openingValue : null;
     return {
       allRows,
       opening,

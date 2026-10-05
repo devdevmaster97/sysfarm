@@ -632,15 +632,21 @@ async function startServer() {
         ORDER BY c.data_lancamento ASC, c.id_caixa ASC
       `, [inicio, fim]);
 
-      const openingDate = previousIsoDate(inicio);
-      const opening = await getBankBalanceAtDate(openingDate);
+      const reference = await pool.query(`
+        SELECT data_referencia, saldo
+        FROM saldo_bancario
+        WHERE registro_unico = TRUE
+        ORDER BY id_saldo ASC
+        LIMIT 1
+      `);
+      const referenceRow = reference.rows[0];
       res.json({
         rows: result.rows,
         dataInicio: inicio,
         dataFim: fim,
-        dataSaldoInicial: openingDate,
-        saldoInicial: opening.configured ? opening.saldo : null,
-        saldoConfigurado: opening.configured
+        dataSaldoInicial: referenceRow ? String(referenceRow.data_referencia).split('T')[0] : null,
+        saldoInicial: referenceRow ? parseFloat(referenceRow.saldo) : null,
+        saldoConfigurado: !!referenceRow
       });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
