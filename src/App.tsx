@@ -2806,8 +2806,10 @@ function MovimentosPeriodo() {
         h2{font-size:18px;font-weight:900;margin-bottom:2px}
         .sub{color:#666;font-size:11px;margin-bottom:16px}
         table{width:100%;border-collapse:collapse}
+        thead{display:table-header-group}
         thead tr{background:#f5f5f0;border-bottom:2px solid #ccc}
         thead th{padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left}
+        .total-row{break-inside:avoid;page-break-inside:avoid}
         .total-row td{padding:8px 6px;font-weight:900;font-size:13px;border-top:2px solid #333;background:#f5f5f0}
         @page{margin:1.5cm;size:A4 landscape}
       </style>
@@ -2824,8 +2826,7 @@ function MovimentosPeriodo() {
           <th style="text-align:right">Saldo Acum.</th>
           <th>Data</th>
         </tr></thead>
-        <tbody>${openingRow}${linhas}</tbody>
-        <tfoot>
+        <tbody>${openingRow}${linhas}
           <tr class="total-row">
             <td colspan="2">TOTAIS</td>
             <td></td>
@@ -2836,7 +2837,7 @@ function MovimentosPeriodo() {
             </td>
             <td></td>
           </tr>
-        </tfoot>
+        </tbody>
       </table>
     </body></html>`;
 
