@@ -268,16 +268,13 @@ async function startServer() {
       const result = await pool.query(`
         INSERT INTO saldo_bancario (data_referencia, saldo, id_usuario, registro_unico)
         VALUES ($1, $2, $3, TRUE)
-        ON CONFLICT (registro_unico) DO NOTHING
+        ON CONFLICT (registro_unico) DO UPDATE SET
+          data_referencia = EXCLUDED.data_referencia,
+          saldo = EXCLUDED.saldo,
+          id_usuario = EXCLUDED.id_usuario,
+          atualizado_em = NOW()
         RETURNING *
       `, [data_referencia, saldoNumber, id_usuario || null]);
-
-      if (result.rows.length === 0) {
-        return res.status(409).json({
-          status: "error",
-          message: "O saldo bancário inicial já foi informado. Os próximos saldos são calculados automaticamente pelos lançamentos."
-        });
-      }
 
       res.status(201).json({ status: "success", data: result.rows[0] });
     } catch (err) {

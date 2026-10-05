@@ -3813,13 +3813,6 @@ function BankBalanceSettings({
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (data?.configured) {
-      setMessage({
-        text: 'O saldo inicial já foi informado. Os próximos saldos são calculados automaticamente.',
-        type: 'error'
-      });
-      return;
-    }
     const balance = parseBalance(balanceInput);
     if (!referenceDate || !Number.isFinite(balance)) {
       setMessage({ text: 'Informe uma data e um saldo válidos.', type: 'error' });
@@ -3844,7 +3837,12 @@ function BankBalanceSettings({
         setMessage({ text: json.message || 'Não foi possível salvar o saldo.', type: 'error' });
         return;
       }
-      setMessage({ text: 'Saldo inicial salvo. A partir de agora, os próximos saldos serão calculados automaticamente.', type: 'success' });
+      setMessage({
+        text: data?.configured
+          ? 'Saldo de referência atualizado. Todos os saldos foram recalculados automaticamente.'
+          : 'Saldo inicial salvo. A partir de agora, os próximos saldos serão calculados automaticamente.',
+        type: 'success'
+      });
       await loadBalance();
     } catch {
       setMessage({ text: 'Erro de conexão ao salvar o saldo bancário.', type: 'error' });
@@ -3864,7 +3862,7 @@ function BankBalanceSettings({
             <div className="p-2 rounded-xl bg-farm-cream/15"><Wallet size={22} /></div>
             <div>
               <h3 className="font-serif text-xl font-bold">Saldo bancário inicial</h3>
-              <p className="text-xs text-farm-cream/70 mt-0.5">Cadastro único da soma consolidada das contas</p>
+              <p className="text-xs text-farm-cream/70 mt-0.5">Referência única da soma consolidada das contas</p>
             </div>
           </div>
 
@@ -3887,7 +3885,7 @@ function BankBalanceSettings({
                   type="date"
                   value={referenceDate}
                   onChange={event => setReferenceDate(event.target.value)}
-                  disabled={isReadonly || !!data?.configured}
+                  disabled={isReadonly}
                   className={DATE_FIELD_CLASS}
                   required
                 />
@@ -3903,7 +3901,7 @@ function BankBalanceSettings({
                     inputMode="decimal"
                     value={balanceInput}
                     onChange={event => setBalanceInput(event.target.value)}
-                    disabled={isReadonly || !!data?.configured}
+                    disabled={isReadonly}
                     placeholder="0,00"
                     className={`${DATE_FIELD_CLASS} pl-12`}
                     required
@@ -3914,9 +3912,9 @@ function BankBalanceSettings({
 
             {data?.configured ? (
               <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-4 py-3">
-                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Cadastro inicial concluído</p>
+                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Saldo de referência cadastrado</p>
                 <p className="text-xs leading-relaxed text-emerald-700/75 dark:text-emerald-300/75 mt-1">
-                  Não é necessário alterar este valor. Cada crédito aumenta o saldo e cada débito reduz o saldo automaticamente.
+                  Os próximos saldos são automáticos. Se a data ou o valor estiver incorreto, corrija os campos acima e salve novamente.
                 </p>
               </div>
             ) : (
@@ -3935,14 +3933,18 @@ function BankBalanceSettings({
               </div>
             )}
 
-            {!isReadonly && !data?.configured && (
+            {!isReadonly && (
               <button
                 type="submit"
                 disabled={saving || loading}
                 className="w-full sm:w-auto min-h-12 px-6 py-3 bg-farm-green text-farm-cream rounded-xl font-bold hover:bg-farm-coffee transition-colors shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <Check size={18} />
-                {saving ? 'Salvando...' : 'Cadastrar saldo inicial'}
+                {saving
+                  ? 'Salvando...'
+                  : data?.configured
+                    ? 'Atualizar saldo de referência'
+                    : 'Cadastrar saldo inicial'}
               </button>
             )}
           </div>
