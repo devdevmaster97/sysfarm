@@ -1983,11 +1983,29 @@ function buildFechamentoPdf(data: { rows: any[]; total: number; dataFim: string 
   return pdfFileFromDoc(doc, `fechamento-caixa-${data.dataFim}.pdf`, 'Fechamento do Caixa');
 }
 
-function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: string }): PreparedPdf {
+function buildMovimentosPdf(data: {
+  rows: any[];
+  dataInicio: string;
+  dataFim: string;
+  saldoInicial?: number | null;
+  saldoFinal?: number | null;
+}): PreparedPdf {
   let saldo = 0;
   let totalCreditos = 0;
   let totalDebitos = 0;
-  const body = data.rows.map(row => {
+  const body: unknown[][] = [];
+  if (typeof data.saldoInicial === 'number') {
+    body.push([
+      '',
+      pdfDate(data.dataInicio),
+      'SALDO DOS BANCOS',
+      '',
+      '',
+      '',
+      `${data.saldoInicial >= 0 ? 'C' : 'D'} R$ ${pdfMoney(data.saldoInicial)}`
+    ]);
+  }
+  data.rows.forEach(row => {
     const valor = parseFloat(row.valor);
     if (row.natureza === 'C') {
       saldo += valor;
@@ -1996,7 +2014,7 @@ function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: st
       saldo -= valor;
       totalDebitos += valor;
     }
-    return [
+    body.push([
       row.natureza,
       pdfDate(row.data_lancamento),
       row.historico || '',
@@ -2004,8 +2022,9 @@ function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: st
       row.id_banco || '—',
       `R$ ${pdfMoney(valor)}`,
       `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
-    ];
+    ]);
   });
+  const saldoFinal = typeof data.saldoFinal === 'number' ? data.saldoFinal : saldo;
 
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   addPdfHeader(
@@ -2023,8 +2042,8 @@ function buildMovimentosPdf(data: { rows: any[]; dataInicio: string; dataFim: st
       'TOTAIS',
       `Créditos: R$ ${pdfMoney(totalCreditos)}`,
       `Débitos: R$ ${pdfMoney(totalDebitos)}`,
-      '',
-      `${saldo >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldo)}`
+      'SALDO FINAL',
+      `${saldoFinal >= 0 ? 'C' : 'D'} R$ ${pdfMoney(saldoFinal)}`
     ]],
     theme: 'grid',
     headStyles: { fillColor: [90, 90, 64], textColor: 255 },
@@ -2636,7 +2655,12 @@ function MovimentosPeriodo() {
   const [ano, setAno] = useState(now.getFullYear());
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(today);
-  const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
+  const [data, setData] = useState<{
+    rows: any[];
+    dataInicio: string;
+    dataFim: string;
+    saldoInicial?: number | null;
+  } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -2661,11 +2685,16 @@ function MovimentosPeriodo() {
       }
       return { ...row, saldoAcum: balance, val: value, selected };
     });
+    const opening = typeof data.saldoInicial === 'number' ? Number(data.saldoInicial) : null;
     return {
       allRows,
+      opening,
+      finalBalance: opening === null ? null : opening + totalCredits - totalDebits,
       report: {
         ...data,
-        rows: allRows.filter(row => row.selected)
+        rows: allRows.filter(row => row.selected),
+        saldoInicial: opening,
+        saldoFinal: opening === null ? null : opening + totalCredits - totalDebits
       },
       totalCredits,
       totalDebits
@@ -2738,6 +2767,16 @@ function MovimentosPeriodo() {
     let saldo = 0;
     let totalC = 0, totalD = 0;
 
+    const opening = typeof reportData.saldoInicial === 'number' ? Number(reportData.saldoInicial) : null;
+    const openingRow = opening === null ? '' : `
+      <tr style="background:#f5f5f0;border-bottom:2px solid #ccc">
+        <td></td>
+        <td colspan="4" style="padding:7px 6px;font-weight:900">SALDO DOS BANCOS</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:900;color:${opening >= 0 ? '#16a34a' : '#dc2626'}">
+          ${opening >= 0 ? 'C' : 'D'} ${fmt(opening)}
+        </td>
+        <td style="padding:7px 6px;white-space:nowrap">${fmtBR(data.dataInicio)}</td>
+      </tr>`;
     const linhas = reportData.rows.map(row => {
       const val = parseFloat(row.valor);
       const nat = row.natureza;
@@ -2784,15 +2823,15 @@ function MovimentosPeriodo() {
           <th style="text-align:right">Saldo Acum.</th>
           <th>Data</th>
         </tr></thead>
-        <tbody>${linhas}</tbody>
+        <tbody>${openingRow}${linhas}</tbody>
         <tfoot>
           <tr class="total-row">
             <td colspan="2">TOTAIS</td>
             <td></td>
             <td style="color:#16a34a">Recebimentos: ${fmt(totalC)}</td>
             <td style="color:#dc2626">Pagamentos: ${fmt(totalD)}</td>
-            <td style="text-align:right;color:${totalC - totalD >= 0 ? '#16a34a' : '#dc2626'}">
-              ${totalC - totalD >= 0 ? 'C' : 'D'} ${fmt(totalC - totalD)}
+            <td style="text-align:right;color:${(opening === null ? totalC - totalD : opening + totalC - totalD) >= 0 ? '#16a34a' : '#dc2626'}">
+              ${opening === null ? 'SALDO DO PERÍODO' : 'SALDO FINAL'} ${((opening === null ? totalC - totalD : opening + totalC - totalD) >= 0 ? 'C' : 'D')} ${fmt(opening === null ? totalC - totalD : opening + totalC - totalD)}
             </td>
             <td></td>
           </tr>
@@ -2855,7 +2894,13 @@ function MovimentosPeriodo() {
       {data && periodView && (
         <>
           {/* Totalizadores */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Saldo inicial</p>
+              <p className={`text-xl font-black ${periodView.opening === null ? 'text-farm-green/40' : periodView.opening >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {periodView.opening === null ? 'Não cadastrado' : `${periodView.opening < 0 ? '- ' : ''}R$ ${fmt(periodView.opening)}`}
+              </p>
+            </div>
             <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Total Recebimentos</p>
               <p className="text-xl font-black text-emerald-600">R$ {totalC.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -2865,9 +2910,9 @@ function MovimentosPeriodo() {
               <p className="text-xl font-black text-rose-600">R$ {totalD.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="bg-white dark:bg-[#1a1a11] rounded-2xl shadow-sm border border-farm-green/5 dark:border-white/5 p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Saldo do Período</p>
-              <p className={`text-xl font-black ${(totalC - totalD) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                R$ {(totalC - totalD).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              <p className="text-xs font-bold uppercase tracking-wide text-farm-green/50 dark:text-[#e5e5d0]/60 mb-1">Saldo final</p>
+              <p className={`text-xl font-black ${periodView.finalBalance === null ? 'text-farm-green/40' : periodView.finalBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {periodView.finalBalance === null ? 'Não cadastrado' : `${periodView.finalBalance < 0 ? '- ' : ''}R$ ${fmt(periodView.finalBalance)}`}
               </p>
             </div>
           </div>
@@ -2905,6 +2950,18 @@ function MovimentosPeriodo() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
+                  {periodView.opening !== null && (
+                    <tr className="bg-farm-cream/60 dark:bg-white/10 border-b-2 border-farm-green/20">
+                      <td className="px-4 py-3" />
+                      <td className="px-4 py-3" />
+                      <td colSpan={4} className="px-4 py-3 text-sm font-black uppercase tracking-wide">Saldo dos Bancos</td>
+                      <td className={`px-4 py-3 text-right font-black whitespace-nowrap ${periodView.opening >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {periodView.opening >= 0 ? 'C' : 'D'} R$ {fmt(periodView.opening)}
+                      </td>
+                      <td className="px-4 py-3" />
+                      <td className="px-4 py-3 text-xs font-bold whitespace-nowrap">{fmtBR(data.dataInicio)}</td>
+                    </tr>
+                  )}
                   {periodView.allRows.map(row => (
                     <tr
                       key={row.id_caixa}
@@ -2948,6 +3005,20 @@ function MovimentosPeriodo() {
                     </tr>
                   ))}
                 </tbody>
+                {periodView.finalBalance !== null && (
+                  <tfoot className="border-t-2 border-farm-green/20 dark:border-white/10 bg-farm-cream/40 dark:bg-white/5">
+                    <tr>
+                      <td className="px-4 py-4" />
+                      <td className="px-4 py-4" />
+                      <td colSpan={4} className="px-4 py-4 text-sm font-black uppercase tracking-wide">Saldo final</td>
+                      <td className={`px-4 py-4 text-right text-base font-black whitespace-nowrap ${periodView.finalBalance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {periodView.finalBalance >= 0 ? 'C' : 'D'} R$ {fmt(periodView.finalBalance)}
+                      </td>
+                      <td className="px-4 py-4" />
+                      <td className="px-4 py-4" />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>

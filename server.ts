@@ -605,6 +605,18 @@ async function startServer() {
       if (!dataInicio || !dataFim) {
         return res.status(400).json({ status: "error", message: "dataInicio e dataFim são obrigatórios" });
       }
+      const inicio = String(dataInicio);
+      const fim = String(dataFim);
+      if (!isIsoDate(inicio) || !isIsoDate(fim)) {
+        return res.status(400).json({ status: "error", message: "Informe datas inicial e final válidas." });
+      }
+      if (inicio > fim) {
+        return res.status(400).json({
+          status: "error",
+          message: "A data inicial não pode ser posterior à data final."
+        });
+      }
+
       const result = await pool.query(`
         SELECT
           c.id_caixa,
@@ -616,11 +628,20 @@ async function startServer() {
           c.id_banco
         FROM caixa c
         LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
-        WHERE c.data_lancamento BETWEEN $1 AND $2
+        WHERE c.data_lancamento::date BETWEEN $1::date AND $2::date
         ORDER BY c.data_lancamento ASC, c.id_caixa ASC
-      `, [dataInicio, dataFim]);
+      `, [inicio, fim]);
 
-      res.json({ rows: result.rows, dataInicio, dataFim });
+      const openingDate = previousIsoDate(inicio);
+      const opening = await getBankBalanceAtDate(openingDate);
+      res.json({
+        rows: result.rows,
+        dataInicio: inicio,
+        dataFim: fim,
+        dataSaldoInicial: openingDate,
+        saldoInicial: opening.configured ? opening.saldo : null,
+        saldoConfigurado: opening.configured
+      });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
     }
