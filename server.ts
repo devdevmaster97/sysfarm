@@ -62,9 +62,14 @@ async function startServer() {
     return date.toISOString().slice(0, 10);
   };
 
-  const monthEndIsoDate = (iso: string) => {
-    const [year, month] = iso.slice(0, 7).split('-').map(Number);
-    return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  const monthEndIsoDate = (value: unknown) => {
+    const match = String(value ?? '').match(/^(\d{4})-(\d{2})/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || month < 1 || month > 12) return null;
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   };
 
   const getBankBalanceAtDate = async (targetDate: string) => {
@@ -400,8 +405,8 @@ async function startServer() {
       const monthEndDates = Array.from(new Set(
         dataResult.rows
           .filter((row: any) => row.encerra_mes)
-          .map((row: any) => monthEndIsoDate(String(row.data_lancamento).split('T')[0]))
-          .filter((date: string) => date <= today)
+          .map((row: any) => monthEndIsoDate(row.data_lancamento))
+          .filter((date): date is string => !!date && date <= today)
       ));
       const balances = new Map<string, Awaited<ReturnType<typeof getBankBalanceAtDate>>>();
       await Promise.all(monthEndDates.map(async date => {
@@ -409,8 +414,8 @@ async function startServer() {
       }));
       const rows = dataResult.rows.map((row: any) => {
         if (!row.encerra_mes) return row;
-        const date = monthEndIsoDate(String(row.data_lancamento).split('T')[0]);
-        if (date > today) return { ...row, encerra_mes: false };
+        const date = monthEndIsoDate(row.data_lancamento);
+        if (!date || date > today) return { ...row, encerra_mes: false };
         const balance = balances.get(date);
         return {
           ...row,
@@ -602,6 +607,7 @@ async function startServer() {
       }
       const result = await pool.query(`
         SELECT
+          c.id_caixa,
           c.data_lancamento,
           UPPER(TRIM(c.natureza)) AS natureza,
           c.historico,

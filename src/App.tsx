@@ -1064,11 +1064,9 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
   isLoading?: boolean;
 }) {
   const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    const datePart = String(dateStr).split('T')[0];
-    const parts = datePart.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const match = String(dateStr ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return String(dateStr ?? '');
+    return `${match[3]}/${match[2]}/${match[1]}`;
   };
 
   const formatCurrency = (value: number) =>
@@ -1090,8 +1088,8 @@ function ExpenseList({ expenses, categories, banks, onEdit, onDelete, currentPag
     id ? (banks.find(b => b.id_banco === id)?.nome ?? `Banco ${id}`) : '—';
 
   const sortedExpenses = [...expenses].sort((a, b) => {
-    const da = String(a.data_lancamento).split('T')[0];
-    const db = String(b.data_lancamento).split('T')[0];
+    const da = String(a.data_lancamento ?? '').slice(0, 10);
+    const db = String(b.data_lancamento ?? '').slice(0, 10);
     return db.localeCompare(da) || (b.id_caixa - a.id_caixa);
   });
 
@@ -2639,21 +2637,50 @@ function MovimentosPeriodo() {
   const [dataInicio, setDataInicio] = useState(firstDay);
   const [dataFim, setDataFim] = useState(today);
   const [data, setData] = useState<{ rows: any[]; dataInicio: string; dataFim: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [pdfReady, setPdfReady] = useState(false);
   const pdfRef = useRef<PreparedPdf | null>(null);
   const actionsRef = useScrollToReportActions(data);
 
+  const periodView = React.useMemo(() => {
+    if (!data) return null;
+    let balance = 0;
+    let totalCredits = 0;
+    let totalDebits = 0;
+    const allRows = data.rows.map(row => {
+      const selected = selectedIds.has(Number(row.id_caixa));
+      const value = parseFloat(row.valor);
+      if (selected && row.natureza === 'C') {
+        balance += value;
+        totalCredits += value;
+      } else if (selected) {
+        balance -= value;
+        totalDebits += value;
+      }
+      return { ...row, saldoAcum: balance, val: value, selected };
+    });
+    return {
+      allRows,
+      report: {
+        ...data,
+        rows: allRows.filter(row => row.selected)
+      },
+      totalCredits,
+      totalDebits
+    };
+  }, [data, selectedIds]);
+
   useEffect(() => {
-    if (!data) {
+    if (!periodView) {
       pdfRef.current = null;
       setPdfReady(false);
       return;
     }
-    pdfRef.current = buildMovimentosPdf(data);
+    pdfRef.current = buildMovimentosPdf(periodView.report);
     setPdfReady(true);
-  }, [data]);
+  }, [periodView]);
 
   const fmt = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtBR = (iso: string) => { const [y, m, d] = String(iso).split('T')[0].split('-'); return `${d}/${m}/${y}`; };
@@ -2676,18 +2703,42 @@ function MovimentosPeriodo() {
     try {
       const res = await fetch(`${API_URL}/api/reports/movimentos-periodo?dataInicio=${dataInicio}&dataFim=${dataFim}`, { credentials: 'include' });
       const json = await res.json();
-      if (json.status === 'error') setError(json.detail || json.message);
-      else setData(json);
+      if (json.status === 'error') {
+        setData(null);
+        setSelectedIds(new Set());
+        setError(json.detail || json.message);
+      } else {
+        setData(json);
+        setSelectedIds(new Set((json.rows ?? []).map((row: any) => Number(row.id_caixa))));
+      }
     } catch { setError('Erro de conexão.'); }
     finally { setLoading(false); }
   };
 
-  const imprimir = () => {
+  const toggleRow = (id: number) => {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = !!data?.rows.length && selectedIds.size === data.rows.length;
+  const toggleAll = () => {
     if (!data) return;
+    setSelectedIds(allSelected
+      ? new Set()
+      : new Set(data.rows.map(row => Number(row.id_caixa)))
+    );
+  };
+
+  const imprimir = () => {
+    const reportData = periodView?.report;
+    if (!data || !reportData) return;
     let saldo = 0;
     let totalC = 0, totalD = 0;
 
-    const linhas = data.rows.map(row => {
+    const linhas = reportData.rows.map(row => {
       const val = parseFloat(row.valor);
       const nat = row.natureza;
       if (nat === 'C') { saldo += val; totalC += val; }
@@ -2722,7 +2773,7 @@ function MovimentosPeriodo() {
       </style>
     </head><body>
       <h2>MOVIMENTOS POR DATA</h2>
-      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${data.rows.length} lançamentos</p>
+      <p class="sub">Período: ${fmtBR(data.dataInicio)} a ${fmtBR(data.dataFim)} &nbsp;·&nbsp; ${reportData.rows.length} de ${data.rows.length} lançamentos incluídos</p>
       <table>
         <thead><tr>
           <th style="width:20px">D/C</th>
@@ -2752,15 +2803,8 @@ function MovimentosPeriodo() {
     printHtml(html);
   };
 
-  // Calcula saldo acumulado para a tela
-  let saldoAcum = 0;
-  let totalC = 0, totalD = 0;
-  const rows = (data?.rows ?? []).map(row => {
-    const val = parseFloat(row.valor);
-    if (row.natureza === 'C') { saldoAcum += val; totalC += val; }
-    else { saldoAcum -= val; totalD += val; }
-    return { ...row, saldoAcum, val };
-  });
+  const totalC = periodView?.totalCredits ?? 0;
+  const totalD = periodView?.totalDebits ?? 0;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -2808,7 +2852,7 @@ function MovimentosPeriodo() {
 
       {error && <div className="bg-rose-50 border border-rose-200 text-rose-600 px-4 py-3 rounded-2xl text-sm font-mono">{error}</div>}
 
-      {data && (
+      {data && periodView && (
         <>
           {/* Totalizadores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2832,12 +2876,24 @@ function MovimentosPeriodo() {
           <div className="bg-white dark:bg-[#1a1a11] rounded-3xl shadow-sm border border-farm-green/5 dark:border-white/5 overflow-hidden">
             <div className="px-6 py-4 border-b border-farm-green/10 dark:border-white/5 flex items-center justify-between">
               <h3 className="font-serif text-lg font-bold dark:text-[#e5e5d0]">Movimentos — {fmtBR(data.dataInicio)} a {fmtBR(data.dataFim)}</h3>
-              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">{rows.length} lançamentos</span>
+              <span className="text-xs text-farm-green/40 dark:text-[#e5e5d0]/50 font-medium">
+                {selectedIds.size} de {data.rows.length} lançamentos incluídos
+              </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[800px]">
+              <table className="w-full text-left min-w-[860px]">
                 <thead className="bg-farm-cream/50 dark:bg-white/5 border-b border-farm-green/10 dark:border-white/5">
                   <tr className="text-xs uppercase tracking-widest text-farm-green/50 dark:text-[#e5e5d0]/60">
+                    <th className="px-4 py-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        aria-label={allSelected ? 'Desmarcar todos os lançamentos' : 'Marcar todos os lançamentos'}
+                        title={allSelected ? 'Desmarcar todos' : 'Marcar todos'}
+                        className="w-4 h-4 accent-farm-green cursor-pointer"
+                      />
+                    </th>
                     <th className="px-4 py-3 w-8">D/C</th>
                     <th className="px-4 py-3">Histórico</th>
                     <th className="px-4 py-3 text-right">Valor</th>
@@ -2849,20 +2905,44 @@ function MovimentosPeriodo() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
-                  {rows.map((row, i) => (
-                    <tr key={i} className="hover:bg-farm-cream/10 dark:hover:bg-white/5 transition-colors text-sm">
+                  {periodView.allRows.map(row => (
+                    <tr
+                      key={row.id_caixa}
+                      className={`text-sm transition-colors ${
+                        row.selected
+                          ? 'hover:bg-farm-cream/10 dark:hover:bg-white/5'
+                          : 'bg-slate-50/80 dark:bg-white/[0.02] opacity-55'
+                      }`}
+                    >
+                      <td className="px-4 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.selected}
+                          onChange={() => toggleRow(Number(row.id_caixa))}
+                          aria-label={`${row.selected ? 'Ignorar' : 'Incluir'} lançamento ${row.historico}`}
+                          className="w-4 h-4 accent-farm-green cursor-pointer"
+                        />
+                      </td>
                       <td className={`px-4 py-2.5 font-black text-xs ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
-                      <td className="px-4 py-2.5 font-medium uppercase max-w-xs truncate dark:text-[#e5e5d0]">{row.historico}</td>
+                      <td className={`px-4 py-2.5 font-medium uppercase max-w-xs truncate dark:text-[#e5e5d0] ${row.selected ? '' : 'line-through'}`}>{row.historico}</td>
                       <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {fmt(row.val)}
                       </td>
                       <td className="px-4 py-2.5 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs">{row.categoria}</td>
                       <td className="px-4 py-2.5 text-center text-farm-green/50 dark:text-[#e5e5d0]/60 text-xs">{row.id_banco || '—'}</td>
-                      <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.saldoAcum >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                        {fmt(row.saldoAcum)}
+                      <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${
+                        row.selected
+                          ? row.saldoAcum >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                          : 'text-slate-400'
+                      }`}>
+                        {row.selected ? fmt(row.saldoAcum) : 'Ignorado'}
                       </td>
-                      <td className={`px-4 py-2.5 text-center font-black text-xs ${row.saldoAcum >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {row.saldoAcum >= 0 ? 'C' : 'D'}
+                      <td className={`px-4 py-2.5 text-center font-black text-xs ${
+                        row.selected
+                          ? row.saldoAcum >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          : 'text-slate-400'
+                      }`}>
+                        {row.selected ? (row.saldoAcum >= 0 ? 'C' : 'D') : '—'}
                       </td>
                       <td className="px-4 py-2.5 text-farm-green/60 dark:text-[#e5e5d0]/70 text-xs whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
                     </tr>
