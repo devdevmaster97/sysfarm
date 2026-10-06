@@ -129,6 +129,52 @@ async function startServer() {
       saldoReferencia: parseFloat(row.saldo_referencia)
     };
   };
+
+  const getOpeningBalanceForPeriod = async (periodStart: string, bankOnly: boolean) => {
+    const bankFilter = bankOnly ? 'AND c.id_banco IS NOT NULL' : '';
+    const result = await pool.query(`
+      WITH referencia AS (
+        SELECT data_referencia::date AS data_referencia, saldo
+        FROM saldo_bancario
+        WHERE registro_unico = TRUE
+        ORDER BY id_saldo ASC
+        LIMIT 1
+      )
+      SELECT
+        r.data_referencia,
+        r.saldo AS saldo_referencia,
+        CASE
+          WHEN $1::date = r.data_referencia THEN r.saldo
+          WHEN $1::date > r.data_referencia THEN r.saldo + COALESCE((
+            SELECT SUM(
+              CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
+            )
+            FROM caixa c
+            WHERE c.data_lancamento::date >= r.data_referencia
+              AND c.data_lancamento::date < $1::date
+              ${bankFilter}
+          ), 0)
+          ELSE r.saldo - COALESCE((
+            SELECT SUM(
+              CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
+            )
+            FROM caixa c
+            WHERE c.data_lancamento::date >= $1::date
+              AND c.data_lancamento::date < r.data_referencia
+              ${bankFilter}
+          ), 0)
+        END AS saldo_inicial
+      FROM referencia r
+    `, [periodStart]);
+
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0];
+    return {
+      dataReferencia: String(row.data_referencia).split('T')[0],
+      saldoReferencia: parseFloat(row.saldo_referencia),
+      saldoInicial: parseFloat(row.saldo_inicial)
+    };
+  };
   
   const connSource = process.env.DATABASE_PUBLIC_URL ? 'DATABASE_PUBLIC_URL' : process.env.DATABASE_URL ? 'DATABASE_URL' : 'NONE';
   console.log('Database source:', connSource);
@@ -672,48 +718,16 @@ async function startServer() {
         ORDER BY c.data_lancamento ASC, c.id_caixa ASC
       `, [inicio, fim]);
 
-      const reference = await pool.query(`
-        WITH referencia AS (
-          SELECT data_referencia::date AS data_referencia, saldo
-          FROM saldo_bancario
-          WHERE registro_unico = TRUE
-          ORDER BY id_saldo ASC
-          LIMIT 1
-        )
-        SELECT
-          r.data_referencia,
-          r.saldo AS saldo_referencia,
-          CASE
-            WHEN $1::date = r.data_referencia THEN r.saldo
-            WHEN $1::date > r.data_referencia THEN r.saldo + COALESCE((
-              SELECT SUM(
-                CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
-              )
-              FROM caixa c
-              WHERE c.data_lancamento::date >= r.data_referencia
-                AND c.data_lancamento::date < $1::date
-            ), 0)
-            ELSE r.saldo - COALESCE((
-              SELECT SUM(
-                CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
-              )
-              FROM caixa c
-              WHERE c.data_lancamento::date >= $1::date
-                AND c.data_lancamento::date < r.data_referencia
-            ), 0)
-          END AS saldo_inicial
-        FROM referencia r
-      `, [inicio]);
-      const referenceRow = reference.rows[0];
+      const opening = await getOpeningBalanceForPeriod(inicio, false);
       res.json({
         rows: result.rows,
         dataInicio: inicio,
         dataFim: fim,
         dataSaldoInicial: inicio,
-        dataReferencia: referenceRow ? String(referenceRow.data_referencia).split('T')[0] : null,
-        saldoReferencia: referenceRow ? parseFloat(referenceRow.saldo_referencia) : null,
-        saldoInicial: referenceRow ? parseFloat(referenceRow.saldo_inicial) : null,
-        saldoConfigurado: !!referenceRow
+        dataReferencia: opening?.dataReferencia ?? null,
+        saldoReferencia: opening?.saldoReferencia ?? null,
+        saldoInicial: opening?.saldoInicial ?? null,
+        saldoConfigurado: !!opening
       });
     } catch (err) {
       res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error", detail: String(err) });
@@ -738,9 +752,8 @@ async function startServer() {
         });
       }
 
-      const openingDate = previousIsoDate(dataInicio);
-      const opening = await getBankBalanceAtDate(openingDate);
-      if (!opening.configured) {
+      const opening = await getOpeningBalanceForPeriod(dataInicio, true);
+      if (!opening) {
         return res.status(400).json({
           status: "error",
           message: "Cadastre o saldo bancário atual em Configurações antes de gerar o extrato."
@@ -761,11 +774,11 @@ async function startServer() {
         LEFT JOIN categoria_caixa cat ON c.id_categoria_caixa = cat.id_categoria_caixa
         LEFT JOIN banco b ON c.id_banco = b.id_banco
         WHERE c.id_banco IS NOT NULL
-          AND c.data_lancamento BETWEEN $1 AND $2
+          AND c.data_lancamento::date BETWEEN $1::date AND $2::date
         ORDER BY c.data_lancamento ASC, c.id_caixa ASC
       `, [dataInicio, dataFim]);
 
-      let saldo = opening.saldo;
+      let saldo = opening.saldoInicial;
       let totalCreditos = 0;
       let totalDebitos = 0;
       const rows = result.rows.map((row: any) => {
@@ -783,8 +796,10 @@ async function startServer() {
       res.json({
         dataInicio,
         dataFim,
-        dataSaldoInicial: openingDate,
-        saldoInicial: opening.saldo,
+        dataSaldoInicial: dataInicio,
+        dataReferencia: opening.dataReferencia,
+        saldoReferencia: opening.saldoReferencia,
+        saldoInicial: opening.saldoInicial,
         saldoFinal: saldo,
         totalCreditos,
         totalDebitos,

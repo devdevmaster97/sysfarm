@@ -3273,9 +3273,10 @@ function ExtratoBancario() {
       <style>
         *{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:24px}
         h2{font-size:18px;margin:0 0 3px}.sub{color:#666;margin:0 0 16px}
-        table{width:100%;border-collapse:collapse}thead{background:#f5f5f0;border-bottom:2px solid #aaa}
+        table{width:100%;border-collapse:collapse}thead{display:table-header-group;background:#f5f5f0;border-bottom:2px solid #aaa}
         th{padding:6px;text-align:left;text-transform:uppercase;font-size:9px;color:#666}
-        tfoot{background:#f5f5f0;border-top:2px solid #333}tfoot td{padding:8px 6px;font-weight:900}
+        .total-row{break-inside:avoid;page-break-inside:avoid}
+        .total-row td{padding:8px 6px;font-weight:900;border-top:2px solid #333;background:#f5f5f0}
         @page{margin:1.3cm;size:A4 landscape}
       </style>
     </head><body>
@@ -3283,16 +3284,17 @@ function ExtratoBancario() {
       <p class="sub">Período: ${fmtBR(reportData.dataInicio)} a ${fmtBR(reportData.dataFim)} · ${reportData.rows.length} de ${data?.rows.length ?? 0} lançamentos incluídos</p>
       <table>
         <thead><tr><th>D/C</th><th>Data</th><th>Histórico</th><th>Categoria</th><th>Banco</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
-        <tbody>${openingRow}${rows}</tbody>
-        <tfoot><tr>
-          <td colspan="2">TOTAIS</td>
-          <td style="color:#16a34a">Créditos: R$ ${fmt(reportData.totalCreditos)}</td>
-          <td style="color:#dc2626">Débitos: R$ ${fmt(reportData.totalDebitos)}</td>
-          <td colspan="2">SALDO FINAL</td>
-          <td style="text-align:right;color:${Number(reportData.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
-            ${Number(reportData.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(reportData.saldoFinal)}
-          </td>
-        </tr></tfoot>
+        <tbody>${openingRow}${rows}
+          <tr class="total-row">
+            <td colspan="2">TOTAIS</td>
+            <td style="color:#16a34a">Créditos: R$ ${fmt(reportData.totalCreditos)}</td>
+            <td style="color:#dc2626">Débitos: R$ ${fmt(reportData.totalDebitos)}</td>
+            <td colspan="2">SALDO FINAL</td>
+            <td style="text-align:right;color:${Number(reportData.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
+              ${Number(reportData.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(reportData.saldoFinal)}
+            </td>
+          </tr>
+        </tbody>
       </table>
     </body></html>`);
   };
@@ -3460,6 +3462,18 @@ function ExtratoBancario() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t-2 border-farm-green/20 dark:border-white/10 bg-farm-cream/40 dark:bg-white/5">
+                  <tr>
+                    <td className="px-4 py-4" />
+                    <td className="px-4 py-4" />
+                    <td colSpan={5} className="px-4 py-4 text-sm font-black uppercase tracking-wide">Saldo final</td>
+                    <td className={`px-4 py-4 text-right text-base font-black whitespace-nowrap ${
+                      Number(statementView.report.saldoFinal) >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                    }`}>
+                      {Number(statementView.report.saldoFinal) >= 0 ? 'C' : 'D'} R$ {fmt(statementView.report.saldoFinal)}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
