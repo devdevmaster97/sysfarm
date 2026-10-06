@@ -102,6 +102,16 @@ export default class jsPDF {
     );
   }
 
+  strokeLine(x1: number, y1: number, x2: number, y2: number, color = [204, 204, 204], width = 0.6) {
+    const x1Pt = x1 * MM_TO_PT;
+    const y1Pt = (this.pageHeight - y1) * MM_TO_PT;
+    const x2Pt = x2 * MM_TO_PT;
+    const y2Pt = (this.pageHeight - y2) * MM_TO_PT;
+    this.command(
+      `${normalizeColor(color)} RG ${width.toFixed(2)} w ${x1Pt.toFixed(2)} ${y1Pt.toFixed(2)} m ${x2Pt.toFixed(2)} ${y2Pt.toFixed(2)} l S`
+    );
+  }
+
   strokeRect(x: number, y: number, width: number, height: number, color = [220, 220, 215]) {
     const xPt = x * MM_TO_PT;
     const yPt = (this.pageHeight - y - height) * MM_TO_PT;
@@ -196,6 +206,12 @@ interface TableStyle {
   fillColor?: number[];
   textColor?: number[] | number;
   fontStyle?: string;
+  halign?: TextAlign;
+}
+
+interface PdfCell {
+  content?: unknown;
+  styles?: TableStyle;
 }
 
 interface ColumnStyle {
@@ -223,6 +239,18 @@ interface AutoTableOptions {
   };
   showHead?: string;
   theme?: string;
+}
+
+function cellText(cell: unknown) {
+  if (cell && typeof cell === 'object' && !Array.isArray(cell)) {
+    return String((cell as PdfCell).content ?? '');
+  }
+  return String(cell ?? '');
+}
+
+function cellStyle(cell: unknown) {
+  if (cell && typeof cell === 'object' && !Array.isArray(cell)) return (cell as PdfCell).styles;
+  return undefined;
 }
 
 function wrapText(text: string, widthMm: number, fontSize: number) {
@@ -280,7 +308,7 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     allowPageBreak = true
   ) => {
     const linesByCell = row.map((cell, index) =>
-      wrapText(String(cell ?? ''), widths[index] - padding * 2, fontSize)
+      wrapText(cellText(cell), widths[index] - padding * 2, fontSize)
     );
     const maxLines = Math.max(...linesByCell.map(lines => lines.length), 1);
     const lineHeight = (fontSize * 1.25) / MM_TO_PT;
@@ -289,22 +317,28 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     if (allowPageBreak && y + rowHeight > pageHeight - bottom) {
       doc.addPage();
       y = 15;
-      if (head.length) drawRows(head, options.headStyles, true, false);
+      if (head.length) {
+        drawRows(head, options.headStyles, true, false);
+        if (options.theme === 'plain') doc.strokeLine(left, y, left + availableWidth, y, [204, 204, 204], 0.7);
+      }
     }
 
+    const plain = options.theme === 'plain';
     let x = left;
-    row.forEach((_, index) => {
-      if (style?.fillColor) doc.fillRect(x, y, widths[index], rowHeight, style.fillColor);
-      doc.strokeRect(x, y, widths[index], rowHeight);
+    row.forEach((cell, index) => {
+      const styles = cellStyle(cell);
+      const fill = styles?.fillColor ?? style?.fillColor;
+      if (fill) doc.fillRect(x, y, widths[index], rowHeight, fill);
+      if (!plain) doc.strokeRect(x, y, widths[index], rowHeight);
 
-      doc.setFont('helvetica', bold || style?.fontStyle === 'bold' ? 'bold' : 'normal');
+      doc.setFont('helvetica', bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold' ? 'bold' : 'normal');
       doc.setFontSize(fontSize);
-      const color = style?.textColor;
+      const color = styles?.textColor ?? style?.textColor;
       if (Array.isArray(color)) doc.setTextColor(...color);
       else if (typeof color === 'number') doc.setTextColor(color);
       else doc.setTextColor(42, 42, 28);
 
-      const align = options.columnStyles?.[index]?.halign ?? 'left';
+      const align = styles?.halign ?? options.columnStyles?.[index]?.halign ?? 'left';
       linesByCell[index].forEach((line, lineIndex) => {
         const textX = align === 'right'
           ? x + widths[index] - padding
@@ -325,9 +359,15 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     allowPageBreak = true
   ) => rows.forEach(row => drawRow(row, style, bold, allowPageBreak));
 
-  if (head.length) drawRows(head, options.headStyles, true);
+  if (head.length) {
+    drawRows(head, options.headStyles, true);
+    if (options.theme === 'plain') doc.strokeLine(left, y, left + availableWidth, y, [204, 204, 204], 0.7);
+  }
   drawRows(body, undefined, false);
-  if (foot.length) drawRows(foot, options.footStyles, true);
+  if (foot.length) {
+    if (options.theme === 'plain') doc.strokeLine(left, y, left + availableWidth, y, [51, 51, 51], 0.8);
+    drawRows(foot, options.footStyles, true);
+  }
 
   doc.lastAutoTable = { finalY: y };
 }

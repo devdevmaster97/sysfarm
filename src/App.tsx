@@ -2152,26 +2152,57 @@ function buildMovimentosPdf(data: {
   return pdfFileFromDoc(doc, `movimentos-${data.dataInicio}-a-${data.dataFim}.pdf`, 'Movimentos por Data');
 }
 
+function pdfTone(positive: boolean) {
+  return positive ? [22, 163, 74] : [220, 38, 38];
+}
+
+function pdfPlainCell(content: string, options?: { color?: number[]; align?: 'left' | 'center' | 'right'; bold?: boolean; fill?: number[] }) {
+  return {
+    content,
+    styles: {
+      textColor: options?.color ?? [26, 26, 26],
+      halign: options?.align,
+      fontStyle: options?.bold ? 'bold' : undefined,
+      fillColor: options?.fill
+    }
+  };
+}
+
 function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
+  const cream: number[] = [245, 245, 240];
+  const openingPositive = Number(data.saldoInicial) >= 0;
+  const finalPositive = Number(data.saldoFinal) >= 0;
   const body: unknown[][] = [[
-    '',
-    pdfDate(data.dataInicio),
-    'SALDO DOS BANCOS',
-    '',
-    '',
-    '',
-    `${data.saldoInicial >= 0 ? 'C' : 'D'} R$ ${pdfMoney(data.saldoInicial)}`
+    pdfPlainCell('', { fill: cream }),
+    pdfPlainCell('SALDO DOS BANCOS', { bold: true, fill: cream }),
+    pdfPlainCell('', { fill: cream }),
+    pdfPlainCell('', { fill: cream }),
+    pdfPlainCell('', { fill: cream }),
+    pdfPlainCell(`${openingPositive ? 'C' : 'D'} ${pdfMoney(data.saldoInicial)}`, {
+      color: pdfTone(openingPositive),
+      align: 'right',
+      bold: true,
+      fill: cream
+    }),
+    pdfPlainCell(pdfDate(data.dataInicio), { fill: cream, bold: true })
   ]];
 
   data.rows.forEach(row => {
+    const credit = row.natureza === 'C';
+    const balance = Number(row.saldo_acumulado);
+    const balancePositive = balance >= 0;
     body.push([
-      row.natureza,
-      pdfDate(row.data_lancamento),
+      pdfPlainCell(row.natureza, { color: pdfTone(credit), align: 'center', bold: true }),
       row.historico || '',
-      row.categoria || 'Sem categoria',
-      row.banco_nome || row.id_banco || '—',
-      `R$ ${pdfMoney(Number(row.valor))}`,
-      `${Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ ${pdfMoney(Number(row.saldo_acumulado))}`
+      pdfPlainCell(pdfMoney(Number(row.valor)), { color: pdfTone(credit), align: 'right', bold: true }),
+      pdfPlainCell(row.categoria || 'Sem categoria', { color: [102, 102, 102] }),
+      pdfPlainCell(String(row.id_banco || ''), { color: [102, 102, 102], align: 'center' }),
+      pdfPlainCell(`${balancePositive ? 'C' : 'D'} ${pdfMoney(balance)}`, {
+        color: pdfTone(balancePositive),
+        align: 'right',
+        bold: true
+      }),
+      pdfPlainCell(pdfDate(row.data_lancamento), { color: [102, 102, 102] })
     ]);
   });
 
@@ -2179,34 +2210,38 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
   addPdfHeader(
     doc,
     'EXTRATO BANCÁRIO',
-    `Período: ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · Saldo inicial em ${pdfDate(data.dataSaldoInicial)}`
+    `Período: ${pdfDate(data.dataInicio)} a ${pdfDate(data.dataFim)} · ${data.rows.length} lançamentos incluídos`
   );
   autoTable(doc, {
     startY: 29,
-    head: [['D/C', 'Data', 'Histórico', 'Categoria', 'Banco', 'Valor', 'Saldo']],
+    head: [['D/C', 'Histórico', 'Valor', 'Categoria', 'Banco', 'Saldo acum.', 'Data']],
     body,
     foot: [[
-      '',
-      '',
-      'TOTAIS',
-      `Créditos: R$ ${pdfMoney(data.totalCreditos)}`,
-      `Débitos: R$ ${pdfMoney(data.totalDebitos)}`,
-      '',
-      `${data.saldoFinal >= 0 ? 'C' : 'D'} R$ ${pdfMoney(data.saldoFinal)}`
+      pdfPlainCell('', { fill: cream }),
+      pdfPlainCell('TOTAIS', { bold: true, fill: cream }),
+      pdfPlainCell('', { fill: cream }),
+      pdfPlainCell(`Recebimentos: ${pdfMoney(data.totalCreditos)}`, { color: pdfTone(true), bold: true, fill: cream }),
+      pdfPlainCell(`Pagamentos: ${pdfMoney(data.totalDebitos)}`, { color: pdfTone(false), bold: true, fill: cream }),
+      pdfPlainCell(`SALDO FINAL ${finalPositive ? 'C' : 'D'} ${pdfMoney(data.saldoFinal)}`, {
+        color: pdfTone(finalPositive),
+        align: 'right',
+        bold: true,
+        fill: cream
+      }),
+      pdfPlainCell('', { fill: cream })
     ]],
-    theme: 'grid',
-    headStyles: { fillColor: [90, 90, 64], textColor: 255 },
-    footStyles: { fillColor: [235, 235, 225], textColor: [42, 42, 28], fontStyle: 'bold' },
-    styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
+    theme: 'plain',
+    headStyles: { fillColor: cream, textColor: [102, 102, 102], fontStyle: 'bold' },
+    styles: { fontSize: 8, cellPadding: 1.6, overflow: 'linebreak' },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 10 },
-      1: { cellWidth: 20 },
-      2: { cellWidth: 62 },
-      4: { cellWidth: 34 },
-      5: { halign: 'right', cellWidth: 27 },
-      6: { halign: 'right', cellWidth: 34 }
+      0: { halign: 'center', cellWidth: 12 },
+      2: { halign: 'right', cellWidth: 28 },
+      3: { cellWidth: 46 },
+      4: { halign: 'center', cellWidth: 18 },
+      5: { halign: 'right', cellWidth: 42 },
+      6: { cellWidth: 22 }
     },
-    margin: { left: 10, right: 10, bottom: 14 }
+    margin: { left: 12, right: 12, bottom: 14 }
   });
   return pdfFileFromDoc(
     doc,
@@ -3237,62 +3272,71 @@ function ExtratoBancario() {
     const reportData = statementView?.report;
     if (!reportData) return;
     const opening = Number(reportData.saldoInicial);
-    const openingColor = opening >= 0 ? '#16a34a' : '#dc2626';
+    const finalBalance = Number(reportData.saldoFinal);
     const openingRow = `
       <tr style="background:#f5f5f0;border-bottom:2px solid #ccc">
         <td></td>
-        <td style="padding:7px 6px">${fmtBR(reportData.dataInicio)}</td>
-        <td colspan="3" style="padding:7px 6px;font-weight:900">SALDO DOS BANCOS</td>
-        <td></td>
-        <td style="padding:7px 6px;text-align:right;font-weight:900;color:${openingColor}">
+        <td colspan="4" style="padding:7px 6px;font-weight:900">SALDO DOS BANCOS</td>
+        <td style="padding:7px 6px;text-align:right;font-weight:900;color:${opening >= 0 ? '#16a34a' : '#dc2626'}">
           ${opening >= 0 ? 'C' : 'D'} ${fmt(opening)}
         </td>
+        <td style="padding:7px 6px;white-space:nowrap">${fmtBR(reportData.dataInicio)}</td>
       </tr>`;
     const rows = reportData.rows.map(row => {
       const balance = Number(row.saldo_acumulado);
       const value = Number(row.valor);
       const natureColor = row.natureza === 'C' ? '#16a34a' : '#dc2626';
       const balanceColor = balance >= 0 ? '#16a34a' : '#dc2626';
-      return `
-        <tr style="border-bottom:1px solid #eee">
-          <td style="padding:5px 6px;font-weight:900;color:${natureColor}">${row.natureza}</td>
-          <td style="padding:5px 6px;white-space:nowrap">${fmtBR(row.data_lancamento)}</td>
-          <td style="padding:5px 6px;font-weight:700">${row.historico}</td>
-          <td style="padding:5px 6px;color:#666">${row.categoria}</td>
-          <td style="padding:5px 6px;color:#666">${row.banco_nome}</td>
-          <td style="padding:5px 6px;text-align:right;color:${natureColor}">${fmt(value)}</td>
-          <td style="padding:5px 6px;text-align:right;font-weight:900;color:${balanceColor}">
-            ${balance >= 0 ? 'C' : 'D'} ${fmt(balance)}
-          </td>
-        </tr>`;
+      return `<tr style="border-bottom:1px solid #f0f0f0">
+        <td style="padding:4px 6px;font-weight:900;color:${natureColor};width:20px">${row.natureza}</td>
+        <td style="padding:4px 6px;font-size:12px;max-width:200px;overflow:hidden">${row.historico || ''}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700;color:${natureColor};white-space:nowrap">${fmt(value)}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666">${row.categoria}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666;text-align:center">${row.id_banco || ''}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:700;color:${balanceColor};white-space:nowrap">${balance >= 0 ? 'C' : 'D'} ${fmt(balance)}</td>
+        <td style="padding:4px 6px;font-size:11px;color:#666;white-space:nowrap">${fmtBR(row.data_lancamento)}</td>
+      </tr>`;
     }).join('');
 
     printHtml(`<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
-      <title>Extrato Bancário</title>
+      <title>Extrato Bancário — ${fmtBR(reportData.dataInicio)} a ${fmtBR(reportData.dataFim)}</title>
       <style>
-        *{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:24px}
-        h2{font-size:18px;margin:0 0 3px}.sub{color:#666;margin:0 0 16px}
-        table{width:100%;border-collapse:collapse}thead{display:table-header-group;background:#f5f5f0;border-bottom:2px solid #aaa}
-        th{padding:6px;text-align:left;text-transform:uppercase;font-size:9px;color:#666}
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;padding:24px}
+        h2{font-size:18px;font-weight:900;margin-bottom:2px}
+        .sub{color:#666;font-size:11px;margin-bottom:16px}
+        table{width:100%;border-collapse:collapse}
+        thead{display:table-header-group}
+        thead tr{background:#f5f5f0;border-bottom:2px solid #ccc}
+        thead th{padding:6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#666;text-align:left}
         .total-row{break-inside:avoid;page-break-inside:avoid}
-        .total-row td{padding:8px 6px;font-weight:900;border-top:2px solid #333;background:#f5f5f0}
-        @page{margin:1.3cm;size:A4 landscape}
+        .total-row td{padding:8px 6px;font-weight:900;font-size:13px;border-top:2px solid #333;background:#f5f5f0}
+        @page{margin:1.5cm;size:A4 landscape}
       </style>
     </head><body>
       <h2>EXTRATO BANCÁRIO</h2>
-      <p class="sub">Período: ${fmtBR(reportData.dataInicio)} a ${fmtBR(reportData.dataFim)} · ${reportData.rows.length} de ${data?.rows.length ?? 0} lançamentos incluídos</p>
+      <p class="sub">Período: ${fmtBR(reportData.dataInicio)} a ${fmtBR(reportData.dataFim)} &nbsp;·&nbsp; ${reportData.rows.length} de ${data?.rows.length ?? 0} lançamentos incluídos</p>
       <table>
-        <thead><tr><th>D/C</th><th>Data</th><th>Histórico</th><th>Categoria</th><th>Banco</th><th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th></tr></thead>
+        <thead><tr>
+          <th style="width:20px">D/C</th>
+          <th>Histórico</th>
+          <th style="text-align:right">Valor</th>
+          <th>Categoria</th>
+          <th style="text-align:center">Banco</th>
+          <th style="text-align:right">Saldo Acum.</th>
+          <th>Data</th>
+        </tr></thead>
         <tbody>${openingRow}${rows}
           <tr class="total-row">
             <td colspan="2">TOTAIS</td>
-            <td style="color:#16a34a">Créditos: R$ ${fmt(reportData.totalCreditos)}</td>
-            <td style="color:#dc2626">Débitos: R$ ${fmt(reportData.totalDebitos)}</td>
-            <td colspan="2">SALDO FINAL</td>
-            <td style="text-align:right;color:${Number(reportData.saldoFinal) >= 0 ? '#16a34a' : '#dc2626'}">
-              ${Number(reportData.saldoFinal) >= 0 ? 'C' : 'D'} R$ ${fmt(reportData.saldoFinal)}
+            <td></td>
+            <td style="color:#16a34a">Recebimentos: ${fmt(reportData.totalCreditos)}</td>
+            <td style="color:#dc2626">Pagamentos: ${fmt(reportData.totalDebitos)}</td>
+            <td style="text-align:right;color:${finalBalance >= 0 ? '#16a34a' : '#dc2626'}">
+              SALDO FINAL ${finalBalance >= 0 ? 'C' : 'D'} ${fmt(finalBalance)}
             </td>
+            <td></td>
           </tr>
         </tbody>
       </table>
@@ -3398,13 +3442,13 @@ function ExtratoBancario() {
                         className="w-4 h-4 accent-farm-green cursor-pointer"
                       />
                     </th>
-                    <th className="px-4 py-3">D/C</th>
-                    <th className="px-4 py-3">Data</th>
+                    <th className="px-4 py-3 w-8">D/C</th>
                     <th className="px-4 py-3">Histórico</th>
-                    <th className="px-4 py-3">Categoria</th>
-                    <th className="px-4 py-3">Banco</th>
                     <th className="px-4 py-3 text-right">Valor</th>
-                    <th className="px-4 py-3 text-right">Saldo</th>
+                    <th className="px-4 py-3">Categoria</th>
+                    <th className="px-4 py-3 text-center">Banco</th>
+                    <th className="px-4 py-3 text-right">Saldo Acum.</th>
+                    <th className="px-4 py-3">Data</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-farm-green/5 dark:divide-white/5">
@@ -3420,11 +3464,11 @@ function ExtratoBancario() {
                       />
                     </td>
                     <td className="px-4 py-3" />
-                    <td className="px-4 py-3 text-sm font-bold whitespace-nowrap">{fmtBR(data.dataInicio)}</td>
                     <td colSpan={4} className="px-4 py-3 text-sm font-black uppercase tracking-wide">Saldo dos Bancos</td>
-                    <td className={`px-4 py-3 text-right font-black ${Number(data.saldoInicial) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    <td className={`px-4 py-3 text-right font-black whitespace-nowrap ${Number(data.saldoInicial) >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                       {Number(data.saldoInicial) >= 0 ? 'C' : 'D'} R$ {fmt(data.saldoInicial)}
                     </td>
+                    <td className="px-4 py-3 text-xs font-bold whitespace-nowrap">{fmtBR(data.dataInicio)}</td>
                   </tr>
                   {statementView.allRows.map(row => (
                     <tr
@@ -3445,33 +3489,36 @@ function ExtratoBancario() {
                         />
                       </td>
                       <td className={`px-4 py-2.5 font-black ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{row.natureza}</td>
-                      <td className="px-4 py-2.5 whitespace-nowrap">{fmtBR(row.data_lancamento)}</td>
                       <td className={`px-4 py-2.5 font-bold uppercase max-w-xs truncate ${row.selected ? '' : 'line-through'}`}>{row.historico}</td>
+                      <td className={`px-4 py-2.5 text-right font-bold whitespace-nowrap ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>{fmt(row.valor)}</td>
                       <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.categoria}</td>
-                      <td className="px-4 py-2.5 text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.banco_nome}</td>
-                      <td className={`px-4 py-2.5 text-right font-bold ${row.natureza === 'C' ? 'text-emerald-600' : 'text-rose-600'}`}>R$ {fmt(row.valor)}</td>
+                      <td className="px-4 py-2.5 text-center text-xs text-farm-green/60 dark:text-[#e5e5d0]/70">{row.id_banco || '—'}</td>
                       <td className={`px-4 py-2.5 text-right font-black whitespace-nowrap ${
                         row.selected
                           ? Number(row.saldo_acumulado) >= 0 ? 'text-emerald-700' : 'text-rose-600'
                           : 'text-slate-400'
                       }`}>
                         {row.selected
-                          ? `${Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} R$ ${fmt(row.saldo_acumulado)}`
+                          ? `${Number(row.saldo_acumulado) >= 0 ? 'C' : 'D'} ${fmt(row.saldo_acumulado)}`
                           : 'Ignorado'}
                       </td>
+                      <td className="px-4 py-2.5 text-xs whitespace-nowrap text-farm-green/60 dark:text-[#e5e5d0]/70">{fmtBR(row.data_lancamento)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t-2 border-farm-green/20 dark:border-white/10 bg-farm-cream/40 dark:bg-white/5">
                   <tr>
                     <td className="px-4 py-4" />
+                    <td colSpan={2} className="px-4 py-4 text-sm font-black uppercase tracking-wide">Totais</td>
                     <td className="px-4 py-4" />
-                    <td colSpan={5} className="px-4 py-4 text-sm font-black uppercase tracking-wide">Saldo final</td>
-                    <td className={`px-4 py-4 text-right text-base font-black whitespace-nowrap ${
+                    <td className="px-4 py-4 text-xs font-black text-emerald-600">Recebimentos: {fmt(statementView.report.totalCreditos)}</td>
+                    <td className="px-4 py-4 text-xs font-black text-rose-600">Pagamentos: {fmt(statementView.report.totalDebitos)}</td>
+                    <td className={`px-4 py-4 text-right text-sm font-black whitespace-nowrap ${
                       Number(statementView.report.saldoFinal) >= 0 ? 'text-emerald-700' : 'text-rose-600'
                     }`}>
-                      {Number(statementView.report.saldoFinal) >= 0 ? 'C' : 'D'} R$ {fmt(statementView.report.saldoFinal)}
+                      Saldo final {Number(statementView.report.saldoFinal) >= 0 ? 'C' : 'D'} {fmt(statementView.report.saldoFinal)}
                     </td>
+                    <td className="px-4 py-4" />
                   </tr>
                 </tfoot>
               </table>
