@@ -321,11 +321,15 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     bold: boolean,
     allowPageBreak = true
   ) => {
-    const linesByCell = row.map((cell, index) => {
+    const cellIsBold = (cell: unknown) => {
       const styles = cellStyle(cell);
-      const boldText = bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold';
-      return wrapText(cellText(cell), widths[index] - padding * 2, fontSize, boldText);
-    });
+      if (styles?.fontStyle === 'bold' || style?.fontStyle === 'bold') return true;
+      if (styles?.fontStyle === 'normal' || style?.fontStyle === 'normal') return false;
+      return bold;
+    };
+    const linesByCell = row.map((cell, index) =>
+      wrapText(cellText(cell), widths[index] - padding * 2, fontSize, cellIsBold(cell))
+    );
     const maxLines = Math.max(...linesByCell.map(lines => lines.length), 1);
     const lineHeight = (fontSize * 1.25) / MM_TO_PT;
     const rowHeight = Math.max(6, maxLines * lineHeight + padding * 2);
@@ -359,7 +363,7 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
         x,
         width: widths[index],
         align: styles?.halign ?? options.columnStyles?.[index]?.halign ?? 'left',
-        boldText: bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold',
+        boldText: cellIsBold(cell),
         color: styles?.textColor ?? style?.textColor
       });
       x += widths[index];

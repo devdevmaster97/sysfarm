@@ -2192,7 +2192,7 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
     const balance = Number(row.saldo_acumulado);
     const balancePositive = balance >= 0;
     body.push([
-      pdfPlainCell(row.natureza, { color: pdfTone(credit), align: 'center', bold: true }),
+      pdfPlainCell(row.natureza, { color: pdfTone(credit), bold: true }),
       row.historico || '',
       pdfPlainCell(pdfMoney(Number(row.valor)), { color: pdfTone(credit), align: 'right', bold: true }),
       pdfPlainCell(row.categoria || 'Sem categoria', { color: [102, 102, 102] }),
@@ -2214,7 +2214,7 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
   );
   autoTable(doc, {
     startY: 29,
-    head: [['D/C', 'Histórico', 'Valor', 'Categoria', 'Banco', 'Saldo acum.', 'Data']],
+    head: [['D/C', 'HISTÓRICO', 'VALOR', 'CATEGORIA', 'BANCO', 'SALDO ACUM.', 'DATA']],
     body,
     foot: [[
       pdfPlainCell('', { fill: cream }),
@@ -2231,15 +2231,16 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
       pdfPlainCell('', { fill: cream })
     ]],
     theme: 'plain',
-    headStyles: { fillColor: cream, textColor: [102, 102, 102], fontStyle: 'bold' },
-    styles: { fontSize: 8, cellPadding: 1.6, overflow: 'linebreak' },
+    headStyles: { fillColor: cream, textColor: [102, 102, 102], fontStyle: 'normal' },
+    styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 12 },
-      2: { halign: 'right', cellWidth: 28 },
-      3: { cellWidth: 46 },
-      4: { halign: 'center', cellWidth: 18 },
-      5: { halign: 'right', cellWidth: 44 },
-      6: { cellWidth: 22 }
+      0: { halign: 'left', cellWidth: 9 },
+      1: { cellWidth: 54 },
+      2: { halign: 'right', cellWidth: 24 },
+      3: { cellWidth: 74 },
+      4: { halign: 'center', cellWidth: 15 },
+      5: { halign: 'right', cellWidth: 72 },
+      6: { cellWidth: 25 }
     },
     margin: { left: 12, right: 12, bottom: 14 }
   });
