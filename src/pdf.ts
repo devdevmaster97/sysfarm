@@ -339,7 +339,7 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
       y = 15;
       if (head.length) {
         drawRows(head, options.headStyles, true, false);
-        if (options.theme === 'plain') doc.strokeLine(left, y, left + availableWidth, y, [204, 204, 204], 0.7);
+        drawPlainHeaderRule();
       }
     }
 
@@ -393,9 +393,16 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     allowPageBreak = true
   ) => rows.forEach(row => drawRow(row, style, bold, allowPageBreak));
 
+  const drawPlainHeaderRule = () => {
+    if (options.theme !== 'plain' || !head.length) return;
+    const ruleWidth = 0.6;
+    doc.fillRect(left, y, availableWidth, ruleWidth, [204, 204, 204]);
+    y += ruleWidth;
+  };
+
   if (head.length) {
     drawRows(head, options.headStyles, true);
-    if (options.theme === 'plain') doc.strokeLine(left, y, left + availableWidth, y, [204, 204, 204], 0.7);
+    drawPlainHeaderRule();
   }
   drawRows(body, undefined, false);
   if (foot.length) {
