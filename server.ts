@@ -48,6 +48,10 @@ async function startServer() {
       ON saldo_bancario (registro_unico)
   `);
   await pool.query(`
+    ALTER TABLE categoria_caixa
+      ADD COLUMN IF NOT EXISTS ativa BOOLEAN NOT NULL DEFAULT TRUE
+  `);
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_saldo_bancario_data
       ON saldo_bancario (data_referencia DESC)
   `);
@@ -208,7 +212,15 @@ async function startServer() {
   app.put("/api/categories/:id", async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { descricao } = req.body;
+      const { descricao, ativa } = req.body;
+      if (typeof ativa === 'boolean') {
+        const statusResult = await pool.query(
+          'UPDATE categoria_caixa SET ativa = $1 WHERE id_categoria_caixa = $2 RETURNING *',
+          [ativa, id]
+        );
+        if (statusResult.rows.length === 0) return res.status(404).json({ status: "error", message: "Categoria não encontrada" });
+        return res.json({ status: "success", data: statusResult.rows[0] });
+      }
       if (!descricao) return res.status(400).json({ status: "error", message: "Descrição obrigatória" });
       const result = await pool.query(
         'UPDATE categoria_caixa SET descricao = $1 WHERE id_categoria_caixa = $2 RETURNING *',

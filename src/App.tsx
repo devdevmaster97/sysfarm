@@ -48,6 +48,7 @@ interface User {
 interface Category {
   id_categoria_caixa: number;
   descricao: string;
+  ativa?: boolean;
 }
 
 interface Expense {
@@ -387,6 +388,28 @@ export default function App() {
     showToast('Banco cadastrado!');
   };
 
+  const handleToggleCategory = async (id: number, ativa: boolean) => {
+    try {
+      const response = await fetch(`${API_URL}/api/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ ativa })
+      });
+      const json = await response.json();
+      if (!response.ok || json.status === 'error') {
+        showToast(json.message || 'Não foi possível atualizar a categoria.', 'error');
+        return;
+      }
+      setCategories(prev => prev.map(category =>
+        category.id_categoria_caixa === id ? { ...category, ...json.data, ativa } : category
+      ));
+      showToast(ativa ? 'Categoria disponível para uso.' : 'Categoria marcada como não usada.');
+    } catch {
+      showToast('Erro de conexão ao atualizar a categoria.', 'error');
+    }
+  };
+
   const handleUpdateCategory = async (id: number, descricao: string) => {
     try {
       const res = await fetch(`${API_URL}/api/categories/${id}`, {
@@ -646,7 +669,12 @@ export default function App() {
               </motion.div>
             )}
             {activeTab === 'categories' && (
-              <CategoryList categories={categories} onUpdate={handleUpdateCategory} isReadonly={isReadonly} />
+              <CategoryList
+                categories={categories}
+                onUpdate={handleUpdateCategory}
+                onToggleUse={handleToggleCategory}
+                isReadonly={isReadonly}
+              />
             )}
             {activeTab === 'banks' && <BankList banks={banks} onUpdate={handleUpdateBank} isReadonly={isReadonly} />}
             {activeTab === 'reports' && <ReportsHub categories={categories} />}
@@ -1633,7 +1661,9 @@ function ExpenseModal({ isOpen, onClose, categories, banks, currentUserId, onSav
                   className="w-full px-4 py-3 border-2 border-farm-green/10 dark:border-white/10 rounded-xl focus:border-farm-green focus:outline-none transition-colors font-medium bg-white dark:bg-[#222218] dark:text-[#e5e5d0]"
                 >
                   <option value="">Selecione...</option>
-                  {categories.map(cat => (
+                  {categories
+                    .filter(cat => cat.ativa !== false || String(cat.id_categoria_caixa) === formData.id_categoria_caixa)
+                    .map(cat => (
                     <option key={cat.id_categoria_caixa} value={cat.id_categoria_caixa}>
                       {cat.descricao}
                     </option>
@@ -3805,7 +3835,7 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
           <select value={categoriaId} onChange={e => setCategoriaId(e.target.value)}
             className={`${DATE_FIELD_CLASS} xl:min-w-[200px]`}>
             <option value="">Todas as categorias</option>
-            {categories.map(c => (
+            {categories.filter(c => c.ativa !== false).map(c => (
               <option key={c.id_categoria_caixa} value={c.id_categoria_caixa}>{c.descricao}</option>
             ))}
           </select>
@@ -4547,7 +4577,17 @@ function BankList({ banks, onUpdate, isReadonly }: { banks: BankRow[]; onUpdate:
   );
 }
 
-function CategoryList({ categories, onUpdate, isReadonly }: { categories: Category[]; onUpdate: (id: number, descricao: string) => void; isReadonly?: boolean }) {
+function CategoryList({
+  categories,
+  onUpdate,
+  onToggleUse,
+  isReadonly
+}: {
+  categories: Category[];
+  onUpdate: (id: number, descricao: string) => void;
+  onToggleUse: (id: number, ativa: boolean) => void;
+  isReadonly?: boolean;
+}) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -4589,16 +4629,34 @@ function CategoryList({ categories, onUpdate, isReadonly }: { categories: Catego
                 </button>
               </div>
             ) : (
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-sm uppercase tracking-tight text-farm-brown dark:text-[#e5e5d0] leading-snug pr-2">{cat.descricao}</span>
+              <div className={`flex items-center justify-between gap-3 ${cat.ativa === false ? 'opacity-60' : ''}`}>
+                <div className="min-w-0">
+                  <span className="block font-bold text-sm uppercase tracking-tight text-farm-brown dark:text-[#e5e5d0] leading-snug">{cat.descricao}</span>
+                  {cat.ativa === false && (
+                    <span className="mt-1 inline-block text-[10px] font-black uppercase tracking-widest text-rose-500">Não usada</span>
+                  )}
+                </div>
                 {!isReadonly && (
-                  <button
-                    onClick={() => startEdit(cat)}
-                    className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all flex-shrink-0"
-                    title="Editar"
-                  >
-                    <Pencil size={15} />
-                  </button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onToggleUse(cat.id_categoria_caixa, cat.ativa === false)}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                        cat.ativa === false
+                          ? 'bg-farm-green text-farm-cream'
+                          : 'border border-farm-green/20 text-farm-green dark:text-[#e5e5d0] hover:bg-farm-cream dark:hover:bg-white/5'
+                      }`}
+                    >
+                      {cat.ativa === false ? 'Usar' : 'Não usar'}
+                    </button>
+                    <button
+                      onClick={() => startEdit(cat)}
+                      className="opacity-0 group-hover:opacity-100 p-2 text-farm-green hover:bg-farm-cream rounded-xl transition-all"
+                      title="Editar"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </div>
                 )}
               </div>
             )}
