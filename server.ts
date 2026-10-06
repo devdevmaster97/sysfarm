@@ -231,6 +231,34 @@ async function startServer() {
     }
   });
 
+  app.post("/api/banks", async (req: Request, res: Response) => {
+    try {
+      const { nome, numero_agencia, numero_conta, cidade } = req.body;
+      const bankName = String(nome || '').trim().toUpperCase();
+      if (!bankName) return res.status(400).json({ status: "error", message: "Nome obrigatório" });
+
+      const column = await pool.query(`
+        SELECT data_type, column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'banco' AND column_name = 'id_banco'
+      `);
+      const generatesId = Boolean(column.rows[0]?.column_default);
+      const values = [bankName, numero_agencia || '', numero_conta || '', cidade || ''];
+      const result = await pool.query(
+        generatesId
+          ? `INSERT INTO banco (nome, numero_agencia, numero_conta, cidade)
+             VALUES ($1, $2, $3, $4) RETURNING *`
+          : `INSERT INTO banco (id_banco, nome, numero_agencia, numero_conta, cidade)
+             VALUES ((SELECT COALESCE(MAX(id_banco), 0) + 1 FROM banco), $1, $2, $3, $4)
+             RETURNING *`,
+        values
+      );
+      res.status(201).json({ status: "success", data: result.rows[0] });
+    } catch (err) {
+      res.status(500).json({ status: "error", message: err instanceof Error ? err.message : "Unknown error" });
+    }
+  });
+
   app.put("/api/banks/:id", async (req: Request, res: Response) => {
     try {
       const { id } = req.params;

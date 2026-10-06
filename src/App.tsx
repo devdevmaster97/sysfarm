@@ -254,6 +254,8 @@ export default function App() {
   const [expensesLoading, setExpensesLoading] = useState(false);
   const [expenseLoadError, setExpenseLoadError] = useState('');
   const [isExpenseModalOpen, setExpenseModalOpen] = useState(false);
+  const [isCategoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [isBankModalOpen, setBankModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(null);
   const { toasts, show: showToast } = useToast();
@@ -353,6 +355,36 @@ export default function App() {
     } catch (err) {
       console.error('Erro ao atualizar banco.');
     }
+  };
+
+  const handleCreateCategory = async (descricao: string) => {
+    const response = await fetch(`${API_URL}/api/categories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ descricao: descricao.trim().toUpperCase() })
+    });
+    const json = await response.json();
+    if (!response.ok || json.status === 'error') {
+      throw new Error(json.message || 'Não foi possível cadastrar a categoria.');
+    }
+    setCategories(prev => [...prev, json.data].sort((a, b) => a.descricao.localeCompare(b.descricao)));
+    showToast('Categoria cadastrada!');
+  };
+
+  const handleCreateBank = async (fields: Omit<BankRow, 'id_banco'>) => {
+    const response = await fetch(`${API_URL}/api/banks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ ...fields, nome: fields.nome.trim().toUpperCase() })
+    });
+    const json = await response.json();
+    if (!response.ok || json.status === 'error') {
+      throw new Error(json.message || 'Não foi possível cadastrar o banco.');
+    }
+    setBanks(prev => [...prev, json.data].sort((a, b) => a.nome.localeCompare(b.nome)));
+    showToast('Banco cadastrado!');
   };
 
   const handleUpdateCategory = async (id: number, descricao: string) => {
@@ -552,7 +584,25 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 lg:gap-4">
-            {!isReadonly && (
+            {!isReadonly && activeTab === 'categories' && (
+              <button
+                onClick={() => setCategoryModalOpen(true)}
+                className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
+              >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Categoria</span>
+              </button>
+            )}
+            {!isReadonly && activeTab === 'banks' && (
+              <button
+                onClick={() => setBankModalOpen(true)}
+                className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
+              >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Banco</span>
+              </button>
+            )}
+            {!isReadonly && activeTab !== 'categories' && activeTab !== 'banks' && (
               <button 
                 onClick={() => setExpenseModalOpen(true)}
                 className="bg-farm-green text-farm-cream p-2 lg:px-4 lg:py-2 rounded-xl flex items-center gap-2 hover:bg-farm-coffee transition-colors shadow-md text-sm lg:text-base"
@@ -629,6 +679,16 @@ export default function App() {
       />
       <ToastContainer toasts={toasts} />
       {/* Delete Confirmation Modal */}
+      <CategoryCreateModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        onSave={handleCreateCategory}
+      />
+      <BankCreateModal
+        isOpen={isBankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        onSave={handleCreateBank}
+      />
       <ConfirmDeleteModal
         isOpen={deletingExpenseId !== null}
         onConfirm={confirmDeleteExpense}
@@ -3959,6 +4019,153 @@ function MovimentosPorCategoria({ categories }: { categories: Category[] }) {
         </div>
       )}
     </motion.div>
+  );
+}
+
+function CategoryCreateModal({
+  isOpen,
+  onClose,
+  onSave
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (descricao: string) => Promise<void>;
+}) {
+  const [descricao, setDescricao] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDescricao('');
+    setError('');
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!descricao.trim()) {
+      setError('Informe o nome da categoria.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(descricao);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível cadastrar a categoria.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-md bg-white dark:bg-[#1a1a11] rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-farm-green text-farm-cream px-6 py-5 flex items-center justify-between">
+          <h3 className="font-serif text-2xl font-bold">Nova categoria</h3>
+          <button type="button" onClick={onClose} className="p-1"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">Nome</label>
+            <input
+              autoFocus
+              value={descricao}
+              onChange={event => setDescricao(event.target.value)}
+              className="w-full px-4 py-3 border-2 border-farm-green/15 rounded-xl font-bold uppercase focus:border-farm-green focus:outline-none dark:bg-[#222218] dark:text-[#e5e5d0]"
+              placeholder="Ex.: COMBUSTÍVEL"
+            />
+          </div>
+          {error && <p className="text-sm font-bold text-rose-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full min-h-12 bg-farm-green text-farm-cream rounded-xl font-bold disabled:opacity-50"
+          >
+            {saving ? 'Salvando...' : 'Cadastrar categoria'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function BankCreateModal({
+  isOpen,
+  onClose,
+  onSave
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (fields: Omit<BankRow, 'id_banco'>) => Promise<void>;
+}) {
+  const [form, setForm] = useState({ nome: '', numero_agencia: '', numero_conta: '', cidade: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setForm({ nome: '', numero_agencia: '', numero_conta: '', cidade: '' });
+    setError('');
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form.nome.trim()) {
+      setError('Informe o nome do banco.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(form);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível cadastrar o banco.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (key: keyof typeof form, label: string) => (
+    <div>
+      <label className="block text-xs font-bold uppercase tracking-wide text-farm-green/60 dark:text-[#e5e5d0]/70 mb-2">{label}</label>
+      <input
+        value={form[key]}
+        onChange={event => setForm(current => ({ ...current, [key]: event.target.value }))}
+        className="w-full px-4 py-3 border-2 border-farm-green/15 rounded-xl font-bold uppercase focus:border-farm-green focus:outline-none dark:bg-[#222218] dark:text-[#e5e5d0]"
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-lg bg-white dark:bg-[#1a1a11] rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-farm-green text-farm-cream px-6 py-5 flex items-center justify-between">
+          <h3 className="font-serif text-2xl font-bold">Novo banco</h3>
+          <button type="button" onClick={onClose} className="p-1"><X size={20} /></button>
+        </div>
+        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2">{field('nome', 'Nome')}</div>
+          {field('numero_agencia', 'Agência')}
+          {field('numero_conta', 'Conta')}
+          <div className="sm:col-span-2">{field('cidade', 'Cidade')}</div>
+          {error && <p className="sm:col-span-2 text-sm font-bold text-rose-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={saving}
+            className="sm:col-span-2 w-full min-h-12 bg-farm-green text-farm-cream rounded-xl font-bold disabled:opacity-50"
+          >
+            {saving ? 'Salvando...' : 'Cadastrar banco'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
