@@ -673,19 +673,46 @@ async function startServer() {
       `, [inicio, fim]);
 
       const reference = await pool.query(`
-        SELECT data_referencia, saldo
-        FROM saldo_bancario
-        WHERE registro_unico = TRUE
-        ORDER BY id_saldo ASC
-        LIMIT 1
-      `);
+        WITH referencia AS (
+          SELECT data_referencia::date AS data_referencia, saldo
+          FROM saldo_bancario
+          WHERE registro_unico = TRUE
+          ORDER BY id_saldo ASC
+          LIMIT 1
+        )
+        SELECT
+          r.data_referencia,
+          r.saldo AS saldo_referencia,
+          CASE
+            WHEN $1::date = r.data_referencia THEN r.saldo
+            WHEN $1::date > r.data_referencia THEN r.saldo + COALESCE((
+              SELECT SUM(
+                CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
+              )
+              FROM caixa c
+              WHERE c.data_lancamento::date >= r.data_referencia
+                AND c.data_lancamento::date < $1::date
+            ), 0)
+            ELSE r.saldo - COALESCE((
+              SELECT SUM(
+                CASE WHEN UPPER(TRIM(c.natureza)) = 'C' THEN c.valor ELSE -c.valor END
+              )
+              FROM caixa c
+              WHERE c.data_lancamento::date >= $1::date
+                AND c.data_lancamento::date < r.data_referencia
+            ), 0)
+          END AS saldo_inicial
+        FROM referencia r
+      `, [inicio]);
       const referenceRow = reference.rows[0];
       res.json({
         rows: result.rows,
         dataInicio: inicio,
         dataFim: fim,
-        dataSaldoInicial: referenceRow ? String(referenceRow.data_referencia).split('T')[0] : null,
-        saldoInicial: referenceRow ? parseFloat(referenceRow.saldo) : null,
+        dataSaldoInicial: inicio,
+        dataReferencia: referenceRow ? String(referenceRow.data_referencia).split('T')[0] : null,
+        saldoReferencia: referenceRow ? parseFloat(referenceRow.saldo_referencia) : null,
+        saldoInicial: referenceRow ? parseFloat(referenceRow.saldo_inicial) : null,
         saldoConfigurado: !!referenceRow
       });
     } catch (err) {
