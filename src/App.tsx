@@ -2222,7 +2222,7 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
       pdfPlainCell('', { fill: cream }),
       pdfPlainCell(`Recebimentos: ${pdfMoney(data.totalCreditos)}`, { color: pdfTone(true), bold: true, fill: cream }),
       pdfPlainCell(`Pagamentos: ${pdfMoney(data.totalDebitos)}`, { color: pdfTone(false), bold: true, fill: cream }),
-      pdfPlainCell(`SALDO FINAL ${finalPositive ? 'C' : 'D'} ${pdfMoney(data.saldoFinal)}`, {
+      pdfPlainCell(`SALDO FINAL\n${finalPositive ? 'C' : 'D'} ${pdfMoney(data.saldoFinal)}`, {
         color: pdfTone(finalPositive),
         align: 'right',
         bold: true,
@@ -2238,7 +2238,7 @@ function buildBankStatementPdf(data: BankStatementData): PreparedPdf {
       2: { halign: 'right', cellWidth: 28 },
       3: { cellWidth: 46 },
       4: { halign: 'center', cellWidth: 18 },
-      5: { halign: 'right', cellWidth: 42 },
+      5: { halign: 'right', cellWidth: 44 },
       6: { cellWidth: 22 }
     },
     margin: { left: 12, right: 12, bottom: 14 }

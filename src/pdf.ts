@@ -80,7 +80,7 @@ export default class jsPDF {
 
   text(value: string, x: number, y: number, options?: { align?: TextAlign }) {
     const align = options?.align ?? 'left';
-    const estimatedWidthMm = (value.length * this.fontSize * 0.48) / MM_TO_PT;
+    const estimatedWidthMm = estimateTextWidthMm(value, this.fontSize, this.font === 'F2');
     let drawX = x;
     if (align === 'center') drawX -= estimatedWidthMm / 2;
     if (align === 'right') drawX -= estimatedWidthMm;
@@ -253,23 +253,37 @@ function cellStyle(cell: unknown) {
   return undefined;
 }
 
-function wrapText(text: string, widthMm: number, fontSize: number) {
-  const maxChars = Math.max(4, Math.floor((widthMm * MM_TO_PT) / (fontSize * 0.5)));
-  if (text.length <= maxChars) return [text];
-
-  const lines: string[] = [];
-  let line = '';
-  for (const word of text.split(/\s+/)) {
-    if (!line) {
-      line = word;
-    } else if (`${line} ${word}`.length <= maxChars) {
-      line += ` ${word}`;
-    } else {
-      lines.push(line);
-      line = word;
-    }
+function estimateTextWidthMm(value: string, fontSize: number, bold: boolean) {
+  let units = 0;
+  for (const char of value) {
+    if (char >= '0' && char <= '9') units += 556;
+    else if (char === ' ') units += 278;
+    else if (char === '.' || char === ',') units += 278;
+    else if (char >= 'A' && char <= 'Z') units += bold ? 720 : 640;
+    else units += bold ? 520 : 460;
   }
-  if (line) lines.push(line);
+  return (units / 1000) * fontSize / MM_TO_PT;
+}
+
+function wrapText(text: string, widthMm: number, fontSize: number, bold = false) {
+  const lines: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    if (!paragraph) {
+      lines.push('');
+      continue;
+    }
+    let line = '';
+    for (const word of paragraph.split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (!line || estimateTextWidthMm(candidate, fontSize, bold) <= widthMm) {
+        line = candidate;
+      } else {
+        if (line) lines.push(line);
+        line = word;
+      }
+    }
+    if (line) lines.push(line);
+  }
   return lines.length ? lines : [''];
 }
 
@@ -307,9 +321,11 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     bold: boolean,
     allowPageBreak = true
   ) => {
-    const linesByCell = row.map((cell, index) =>
-      wrapText(cellText(cell), widths[index] - padding * 2, fontSize)
-    );
+    const linesByCell = row.map((cell, index) => {
+      const styles = cellStyle(cell);
+      const boldText = bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold';
+      return wrapText(cellText(cell), widths[index] - padding * 2, fontSize, boldText);
+    });
     const maxLines = Math.max(...linesByCell.map(lines => lines.length), 1);
     const lineHeight = (fontSize * 1.25) / MM_TO_PT;
     const rowHeight = Math.max(6, maxLines * lineHeight + padding * 2);
@@ -324,30 +340,44 @@ export function autoTable(doc: jsPDF, options: AutoTableOptions) {
     }
 
     const plain = options.theme === 'plain';
+    const painted: Array<{
+      lines: string[];
+      x: number;
+      width: number;
+      align: TextAlign;
+      boldText: boolean;
+      color?: number[] | number;
+    }> = [];
     let x = left;
     row.forEach((cell, index) => {
       const styles = cellStyle(cell);
       const fill = styles?.fillColor ?? style?.fillColor;
       if (fill) doc.fillRect(x, y, widths[index], rowHeight, fill);
       if (!plain) doc.strokeRect(x, y, widths[index], rowHeight);
-
-      doc.setFont('helvetica', bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold' ? 'bold' : 'normal');
-      doc.setFontSize(fontSize);
-      const color = styles?.textColor ?? style?.textColor;
-      if (Array.isArray(color)) doc.setTextColor(...color);
-      else if (typeof color === 'number') doc.setTextColor(color);
-      else doc.setTextColor(42, 42, 28);
-
-      const align = styles?.halign ?? options.columnStyles?.[index]?.halign ?? 'left';
-      linesByCell[index].forEach((line, lineIndex) => {
-        const textX = align === 'right'
-          ? x + widths[index] - padding
-          : align === 'center'
-            ? x + widths[index] / 2
-            : x + padding;
-        doc.text(line, textX, y + padding + lineHeight * (lineIndex + 0.8), { align });
+      painted.push({
+        lines: linesByCell[index],
+        x,
+        width: widths[index],
+        align: styles?.halign ?? options.columnStyles?.[index]?.halign ?? 'left',
+        boldText: bold || styles?.fontStyle === 'bold' || style?.fontStyle === 'bold',
+        color: styles?.textColor ?? style?.textColor
       });
       x += widths[index];
+    });
+    painted.forEach(item => {
+      doc.setFont('helvetica', item.boldText ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      if (Array.isArray(item.color)) doc.setTextColor(...item.color);
+      else if (typeof item.color === 'number') doc.setTextColor(item.color);
+      else doc.setTextColor(42, 42, 28);
+      item.lines.forEach((line, lineIndex) => {
+        const textX = item.align === 'right'
+          ? item.x + item.width - padding
+          : item.align === 'center'
+            ? item.x + item.width / 2
+            : item.x + padding;
+        doc.text(line, textX, y + padding + lineHeight * (lineIndex + 0.8), { align: item.align });
+      });
     });
     y += rowHeight;
   };
